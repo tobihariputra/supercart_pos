@@ -39,29 +39,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ((currentMonth - previousMonth) / previousMonth) * 100;
 
     return Scaffold(
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // FAB untuk Laporan Penjualan
-          FloatingActionButton(
-            heroTag: 'laporan',
-            backgroundColor: const Color(0xff7c3aed),
-            onPressed: () {
-              Navigator.pushNamed(context, '/laporan');
-            },
-            child: const Icon(LucideIcons.fileText, color: Colors.white),
-          ),
-          const SizedBox(height: 12),
-          // FAB untuk Transaksi
-          FloatingActionButton(
-            heroTag: 'transaksi',
-            backgroundColor: const Color(0xff2563eb),
-            onPressed: () {
-              Navigator.pushNamed(context, '/cashier');
-            },
-            child: const Icon(LucideIcons.shoppingCart, color: Colors.white),
-          ),
-        ],
+      // FIXED: Gunakan 1 FAB saja untuk transaksi (fitur utama)
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.pushNamed(context, '/cashier'),
+        backgroundColor: const Color(0xff2563eb),
+        icon: const Icon(LucideIcons.shoppingCart, color: Colors.white),
+        label: const Text(
+          "New Sale",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -75,158 +61,119 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xff2563eb), Color(0xff7c3aed)],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Dashboard",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // Header
+              _buildHeader(),
               const SizedBox(height: 20),
-              GridView(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.2,
-                ),
-                children: [
-                  _metricCard(
-                    title: "Monthly Earnings",
-                    value: "\$${(currentMonth / 1000).toStringAsFixed(1)}k",
-                    icon: LucideIcons.dollarSign,
-                    gradient: const [Color(0xff3b82f6), Color(0xff2563eb)],
-                    trailing: "+${growth.toStringAsFixed(1)}%",
-                  ),
-                  _metricCard(
-                    title: "Warehouse Stock",
-                    value: "$warehouseStock",
-                    icon: LucideIcons.box,
-                    gradient: const [Color(0xffa855f7), Color(0xff7e22ce)],
-                    onTap: () => Navigator.pushNamed(context, '/warehouse'),
-                  ),
-                  _metricCard(
-                    title: "Store Stock",
-                    value: "$storeStock",
-                    icon: LucideIcons.store,
-                    gradient: const [Color(0xffec4899), Color(0xffbe185d)],
-                  ),
-                  _metricCard(
-                    title: "Transactions",
-                    value: "1458",
-                    icon: LucideIcons.shoppingCart,
-                    gradient: const [Color(0xfff59e0b), Color(0xffd97706)],
-                  ),
-                ],
-              ),
+
+              // Metrics Grid
+              _buildMetricsGrid(currentMonth, growth),
               const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: _box(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Monthly Revenue",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 220,
-                      child: LineChart(
-                        LineChartData(
-                          titlesData: FlTitlesData(
-                            leftTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: true),
-                            ),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                getTitlesWidget: (value, meta) {
-                                  int index = value.toInt();
-                                  if (index < monthlyEarnings.length) {
-                                    return Text(
-                                      monthlyEarnings[index]["month"]
-                                          .toString(),
-                                    );
-                                  }
-                                  return const SizedBox();
-                                },
-                              ),
-                            ),
-                          ),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: monthlyEarnings.asMap().entries.map((e) {
-                                return FlSpot(
-                                  e.key.toDouble(),
-                                  (e.value["earnings"] as double),
-                                );
-                              }).toList(),
-                              isCurved: true,
-                              color: Colors.blue,
-                              barWidth: 3,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+
+              // Revenue Chart
+              _buildRevenueChart(),
               const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xff2563eb),
-                      ),
-                      icon: const Icon(LucideIcons.shoppingCart),
-                      label: const Text("New Sale"),
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/cashier');
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      icon: const Icon(LucideIcons.package),
-                      label: const Text("Manage Stock"),
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/warehouse');
-                      },
-                    ),
-                  ),
-                ],
-              ),
+
+              // Quick Actions
+              _buildQuickActions(),
+              const SizedBox(height: 80), // Extra padding for FAB
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xff2563eb), Color(0xff7c3aed)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.dashboard_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Dashboard",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                "Overview & Analytics",
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricsGrid(double currentMonth, double growth) {
+    return GridView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 1.3,
+      ),
+      children: [
+        _metricCard(
+          title: "Monthly Earnings",
+          value: "\$${(currentMonth / 1000).toStringAsFixed(1)}k",
+          icon: LucideIcons.trendingUp,
+          gradient: const [Color(0xff3b82f6), Color(0xff2563eb)],
+          trailing: "+${growth.toStringAsFixed(1)}%",
+        ),
+        _metricCard(
+          title: "Warehouse Stock",
+          value: "$warehouseStock",
+          icon: LucideIcons.package,
+          gradient: const [Color(0xffa855f7), Color(0xff7e22ce)],
+          onTap: () => Navigator.pushNamed(context, '/warehouse'),
+        ),
+        _metricCard(
+          title: "Store Stock",
+          value: "$storeStock",
+          icon: LucideIcons.store,
+          gradient: const [Color(0xffec4899), Color(0xffbe185d)],
+        ),
+        _metricCard(
+          title: "Transactions",
+          value: "1,458",
+          icon: LucideIcons.shoppingCart,
+          gradient: const [Color(0xfff59e0b), Color(0xffd97706)],
+        ),
+      ],
     );
   }
 
@@ -244,41 +191,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: gradient),
           borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: gradient.first.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(icon, color: Colors.white, size: 30),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 24),
+                ),
                 if (trailing != null)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: Colors.white.withOpacity(0.25),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       trailing,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  )
+                  ),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-            Text(
-              value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -286,17 +260,206 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  BoxDecoration _box() {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.grey.shade300,
-          blurRadius: 12,
-          offset: const Offset(0, 4),
+  Widget _buildRevenueChart() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade200,
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Revenue Overview",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    "Monthly performance",
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(LucideIcons.moreVertical),
+                onPressed: () {},
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 200,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 20000,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(color: Colors.grey.shade200, strokeWidth: 1);
+                  },
+                ),
+                titlesData: FlTitlesData(
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${(value / 1000).toInt()}k',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        int index = value.toInt();
+                        if (index >= 0 && index < monthlyEarnings.length) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              monthlyEarnings[index]["month"].toString(),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        }
+                        return const SizedBox();
+                      },
+                    ),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: monthlyEarnings.asMap().entries.map((e) {
+                      return FlSpot(
+                        e.key.toDouble(),
+                        (e.value["earnings"] as double),
+                      );
+                    }).toList(),
+                    isCurved: true,
+                    color: const Color(0xff2563eb),
+                    barWidth: 3,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: const Color(0xff2563eb).withOpacity(0.1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            "Quick Actions",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _actionButton(
+                label: "Sales Report",
+                icon: LucideIcons.fileText,
+                color: const Color(0xff7c3aed),
+                onTap: () => Navigator.pushNamed(context, '/laporan'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _actionButton(
+                label: "Manage Stock",
+                icon: LucideIcons.package,
+                color: const Color(0xffec4899),
+                onTap: () => Navigator.pushNamed(context, '/warehouse'),
+              ),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _actionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.shade100,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -33,17 +33,12 @@ class _LoginScreenState extends State<LoginScreen>
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+        );
 
     _animationController.forward();
-
-    // sementara comment login check untuk debugging
-    // _checkLoginStatus();
   }
 
   @override
@@ -58,10 +53,9 @@ class _LoginScreenState extends State<LoginScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor:
-            isError ? Colors.red.withAlpha(180) : Colors.green.withAlpha(180),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.fixed, // FIXED: Gunakan fixed bukan floating
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -81,10 +75,7 @@ class _LoginScreenState extends State<LoginScreen>
       );
 
       if (result['success'] == true) {
-        _showSnackBar("Login kasir berhasil!", isError: false);
-
-        await Future.delayed(const Duration(milliseconds: 500));
-
+        // Navigate dulu, baru show snackbar di dashboard
         if (mounted) {
           Navigator.pushReplacementNamed(context, '/dashboard');
         }
@@ -101,95 +92,179 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue.shade700, // warna sementara agar tidak putih
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.point_of_sale_rounded,
-                        size: 80, color: Colors.white),
-                    const SizedBox(height: 20),
-                    const Text(
-                      "Login",
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xff2563eb), Color(0xff7c3aed)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Logo Icon
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.point_of_sale_rounded,
+                          size: 64,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 40),
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha((0.3 * 255).round()),
-                        borderRadius: BorderRadius.circular(24),
+                      const SizedBox(height: 24),
+                      const Text(
+                        "SuperCart POS",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
-                      child: Column(
-                        children: [
-                          TextField(
-                            controller: _nipC,
-                            enabled: !_loading,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              hintText: "NIP",
-                              filled: true,
-                              fillColor: Colors.white,
-                              prefixIcon: const Icon(Icons.badge_outlined),
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide.none),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Login to continue",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+
+                      // Login Form Card
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _passwordC,
-                            obscureText: _obscurePassword,
-                            enabled: !_loading,
-                            decoration: InputDecoration(
-                              hintText: "Password",
-                              filled: true,
-                              fillColor: Colors.white,
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                icon: Icon(_obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined),
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  });
-                                },
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // NIP Field
+                            TextField(
+                              controller: _nipC,
+                              enabled: !_loading,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                hintText: "NIP",
+                                filled: true,
+                                fillColor: Colors.grey[100],
+                                prefixIcon: Icon(
+                                  Icons.badge_outlined,
+                                  color: Colors.blue[700],
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: Colors.blue[700]!,
+                                    width: 2,
+                                  ),
+                                ),
                               ),
-                              border: OutlineInputBorder(
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Password Field
+                            TextField(
+                              controller: _passwordC,
+                              obscureText: _obscurePassword,
+                              enabled: !_loading,
+                              decoration: InputDecoration(
+                                hintText: "Password",
+                                filled: true,
+                                fillColor: Colors.grey[100],
+                                prefixIcon: Icon(
+                                  Icons.lock_outline,
+                                  color: Colors.blue[700],
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    color: Colors.grey[600],
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                ),
+                                border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide.none),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: Colors.blue[700]!,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: _loading ? null : _login,
-                              child: _loading
-                                  ? const CircularProgressIndicator(
-                                      color: Colors.white,
-                                    )
-                                  : const Text("Masuk",
-                                      style: TextStyle(fontSize: 18)),
+                            const SizedBox(height: 24),
+
+                            // Login Button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 56,
+                              child: ElevatedButton(
+                                onPressed: _loading ? null : _login,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xff2563eb),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: _loading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : const Text(
+                                        "Login",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
