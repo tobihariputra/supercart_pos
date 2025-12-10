@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supercart_pos/services/auth_api_services.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<Offset> _slideAnimation;
 
   final AuthApiService _authService = AuthApiService();
+  final storage = const FlutterSecureStorage();
 
   bool _loading = false;
   bool _obscurePassword = true;
@@ -54,12 +57,52 @@ class _LoginScreenState extends State<LoginScreen>
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? Colors.red : Colors.green,
-        behavior: SnackBarBehavior.fixed, // FIXED: Gunakan fixed bukan floating
+        behavior: SnackBarBehavior.fixed,
         duration: const Duration(seconds: 2),
       ),
     );
   }
 
+  /// Get user role from secure storage
+  Future<String> _getUserRole() async {
+    try {
+      final rolesStr = await storage.read(key: 'user_roles');
+      debugPrint('📋 User Roles from storage: $rolesStr');
+
+      if (rolesStr != null && rolesStr.isNotEmpty) {
+        final roles = json.decode(rolesStr) as List<dynamic>;
+        
+        if (roles.isNotEmpty) {
+          final roleName = roles[0]['name'];
+          debugPrint('✅ User Role: $roleName');
+          return roleName.toString().toLowerCase();
+        }
+      }
+
+      debugPrint('❌ No roles found in storage');
+      return '';
+    } catch (e) {
+      debugPrint('❌ Error getting user role: $e');
+      return '';
+    }
+  }
+
+  /// Get route based on user role
+  String _getRouteByRole(String role) {
+    switch (role) {
+      case 'gudang':
+        debugPrint('🏭 Navigating to /management (gudang)');
+        return '/management';
+      case 'kasir':
+        debugPrint('🛒 Navigating to /dashboard (kasir)');
+        return '/dashboard';
+      default:
+        debugPrint('⚠️ Unknown role: $role, defaulting to /dashboard');
+        return '/dashboard';
+    }
+  }
+
+  /// Handle login process
   Future<void> _login() async {
     if (_nipC.text.isEmpty || _passwordC.text.isEmpty) {
       _showSnackBar("NIP dan password harus diisi!", isError: true);
@@ -69,20 +112,60 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _loading = true);
 
     try {
+      debugPrint('🔐 Attempting login with NIP: ${_nipC.text}');
+      
       final result = await _authService.login(
         nip: _nipC.text.trim(),
         password: _passwordC.text,
       );
 
+      debugPrint('📨 Login Response: $result');
+
       if (result['success'] == true) {
-        // Navigate dulu, baru show snackbar di dashboard
+        // Get role from secure storage (saved by AuthApiService)
+        final userRole = await _getUserRole();
+
+        if (userRole.isEmpty) {
+          if (mounted) {
+            _showSnackBar(
+              'Login berhasil tapi role tidak ditemukan',
+              isError: true,
+            );
+          }
+          return;
+        }
+
+        final route = _getRouteByRole(userRole);
+
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/dashboard');
+          // Navigate to appropriate screen based on role
+          Navigator.pushReplacementNamed(context, route);
+
+          // Show success message
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    userRole == 'gudang'
+                        ? '✅ Login gudang berhasil!'
+                        : '✅ Login kasir berhasil!',
+                  ),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          });
         }
       } else {
-        _showSnackBar(result['error'] ?? 'Login gagal', isError: true);
+        final errorMsg = result['error'] ?? 'Login gagal';
+        debugPrint('❌ Login Error: $errorMsg');
+        _showSnackBar(errorMsg, isError: true);
       }
     } catch (e) {
+      debugPrint('❌ Login Exception: $e');
       _showSnackBar("Terjadi kesalahan: ${e.toString()}", isError: true);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -115,7 +198,7 @@ class _LoginScreenState extends State<LoginScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -138,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen>
                         "Login to continue",
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                         ),
                       ),
                       const SizedBox(height: 40),
@@ -151,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen>
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 20,
                               offset: const Offset(0, 10),
                             ),
@@ -192,6 +275,7 @@ class _LoginScreenState extends State<LoginScreen>
                               controller: _passwordC,
                               obscureText: _obscurePassword,
                               enabled: !_loading,
+                              onSubmitted: (_) => _login(),
                               decoration: InputDecoration(
                                 hintText: "Password",
                                 filled: true,

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../../../core/app_config.dart';
+import 'package:supercart_pos/core/app_config.dart';
 
 class AuthApiService {
   final String baseUrl = AppConfig.baseUrl;
@@ -53,6 +53,14 @@ class AuthApiService {
           );
         }
 
+        // Save user roles
+        if (responseData['result']?['data']?['roles'] != null) {
+          await storage.write(
+            key: 'user_roles',
+            value: json.encode(responseData['result']['data']['roles']),
+          );
+        }
+
         return {
           'success': true,
           'data': responseData,
@@ -63,6 +71,7 @@ class AuthApiService {
     } on DioException catch (e) {
       if (kDebugMode) {
         print('Login error: ${e.message}');
+        print('Response: ${e.response?.data}');
       }
 
       if (e.response != null) {
@@ -93,6 +102,7 @@ class AuthApiService {
       await storage.delete(key: 'login_response');
       await storage.delete(key: 'auth_token');
       await storage.delete(key: 'user_data');
+      await storage.delete(key: 'user_roles');
     } catch (e) {
       if (kDebugMode) {
         print('Logout error: $e');
@@ -122,6 +132,21 @@ class AuthApiService {
     }
   }
 
+  /// Get user roles
+  Future<List<dynamic>?> getUserRoles() async {
+    try {
+      final rolesStr = await storage.read(key: 'user_roles');
+      if (rolesStr != null) {
+        return json.decode(rolesStr) as List<dynamic>;
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Get roles error: $e');
+      }
+      return null;
+    }
+  }
 
   String _extractToken(Map<String, dynamic> responseData) {
     String token = '';

@@ -1,5 +1,12 @@
+// ignore_for_file: unused_local_variable
+
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:supercart_pos/services/categories_api_services.dart';
+import 'package:supercart_pos/services/product_api_service.dart';
+import 'package:supercart_pos/services/supplier_api_services.dart';
 
 class ManagementScreen extends StatefulWidget {
   const ManagementScreen({super.key});
@@ -9,399 +16,984 @@ class ManagementScreen extends StatefulWidget {
 }
 
 class _ManagementScreenState extends State<ManagementScreen> {
-  final List<Map<String, dynamic>> stocks = [
-    {"id": 1, "name": "Laptop HP", "category": "Electronics", "stock": 15, "minStock": 5},
-    {"id": 2, "name": "Mouse Logitech", "category": "Accessories", "stock": 50, "minStock": 20},
-    {"id": 3, "name": "Keyboard Mechanical", "category": "Accessories", "stock": 30, "minStock": 15},
-    {"id": 4, "name": "Monitor LG 24\"", "category": "Electronics", "stock": 20, "minStock": 10},
-    {"id": 5, "name": "Webcam HD", "category": "Electronics", "stock": 25, "minStock": 10},
-  ];
+  final ProductApiService _productApiService = ProductApiService();
+  final CategoriesApiService _categoriesApiService = CategoriesApiService();
+  final SupplierApiService _supplierApiService = SupplierApiService();
+  final ImagePicker _imagePicker = ImagePicker();
+
+  List<dynamic> products = [];
+  List<dynamic> categories = [];
+  List<dynamic> suppliers = [];
+  bool isLoading = false;
+  bool isProcessing = false;
 
   final _nameController = TextEditingController();
-  final _categoryController = TextEditingController();
+  final _barcodeController = TextEditingController();
   final _stockController = TextEditingController();
   final _minStockController = TextEditingController();
+  final _priceController = TextEditingController();
 
-  void _showAddDialog() {
-    _nameController.clear();
-    _categoryController.clear();
-    _stockController.clear();
-    _minStockController.clear();
+  int? selectedCategory;
+  int? selectedSupplier;
+  File? selectedImage;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Tambah Produk'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nama Produk',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _categoryController,
-                decoration: const InputDecoration(
-                  labelText: 'Kategori',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _stockController,
-                decoration: const InputDecoration(
-                  labelText: 'Stok',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _minStockController,
-                decoration: const InputDecoration(
-                  labelText: 'Minimal Stok',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                stocks.add({
-                  "id": stocks.length + 1,
-                  "name": _nameController.text,
-                  "category": _categoryController.text,
-                  "stock": int.parse(_stockController.text),
-                  "minStock": int.parse(_minStockController.text),
-                });
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Produk berhasil ditambahkan!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    fetchProducts();
+    fetchCategories();
+    fetchSuppliers();
   }
 
-  void _showEditDialog(int index) {
-    final item = stocks[index];
-    _nameController.text = item['name'];
-    _categoryController.text = item['category'];
-    _stockController.text = item['stock'].toString();
-    _minStockController.text = item['minStock'].toString();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Produk'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nama Produk',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _categoryController,
-                decoration: const InputDecoration(
-                  labelText: 'Kategori',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _stockController,
-                decoration: const InputDecoration(
-                  labelText: 'Stok',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _minStockController,
-                decoration: const InputDecoration(
-                  labelText: 'Minimal Stok',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                stocks[index] = {
-                  "id": item['id'],
-                  "name": _nameController.text,
-                  "category": _categoryController.text,
-                  "stock": int.parse(_stockController.text),
-                  "minStock": int.parse(_minStockController.text),
-                };
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Produk berhasil diupdate!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            child: const Text('Update'),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _barcodeController.dispose();
+    _stockController.dispose();
+    _minStockController.dispose();
+    _priceController.dispose();
+    super.dispose();
   }
 
-  void _deleteItem(int index) {
-    showDialog(
+  // ================= IMAGE PICKER =================
+
+  Future<void> pickImage() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        setState(() {
+          selectedImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      _showSnackBar('Error picking image: $e', isError: true);
+    }
+  }
+
+  Future<void> takePhoto() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        setState(() {
+          selectedImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      _showSnackBar('Error taking photo: $e', isError: true);
+    }
+  }
+
+  void clearImage() {
+    setState(() {
+      selectedImage = null;
+    });
+  }
+
+  // ================= FETCH =================
+
+  Future<void> fetchProducts() async {
+    if (!mounted || isLoading) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      final result = await _productApiService.getProducts(limit: 100);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        setState(() {
+          products = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+        _showSnackBar(result['error'] ?? 'Gagal memuat produk', isError: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      _showSnackBar("Error: $e", isError: true);
+    }
+  }
+
+  Future<void> fetchCategories() async {
+    if (!mounted) return;
+
+    try {
+      final result = await _categoriesApiService.getCategories();
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        setState(() {
+          categories = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching categories: $e');
+    }
+  }
+
+  Future<void> fetchSuppliers() async {
+    if (!mounted) return;
+
+    try {
+      final result = await _supplierApiService.getSuppliers();
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        setState(() {
+          suppliers = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching suppliers: $e');
+    }
+  }
+
+  // ================= CREATE =================
+
+  Future<void> createProduct() async {
+    if (isProcessing) return;
+
+    if (_nameController.text.trim().isEmpty || _barcodeController.text.trim().isEmpty) {
+      _showSnackBar("Nama dan Barcode harus diisi", isError: true);
+      return;
+    }
+
+    setState(() => isProcessing = true);
+
+    try {
+      final result = await _productApiService.createProduct(
+        barcode: _barcodeController.text.trim(),
+        name: _nameController.text.trim(),
+        categoryId: selectedCategory ?? 0,
+        supplierId: selectedSupplier ?? 0,
+        stockQuantity: int.tryParse(_stockController.text.trim()) ?? 0,
+        minStock: int.tryParse(_minStockController.text.trim()) ?? 0,
+        maxStock: 500,
+        unit: "pcs",
+        purchasePrice: 2500,
+        sellingPrice: int.tryParse(_priceController.text.trim()) ?? 0,
+        imageUrl: "https://picsum.photos/200",
+      );
+
+      if (!mounted) return;
+
+      setState(() => isProcessing = false);
+
+      if (result['success'] == true) {
+        _showSnackBar("Produk berhasil ditambahkan");
+        clearForm();
+
+        if (result['data'] != null) {
+          setState(() {
+            products.insert(0, result['data']);
+          });
+        }
+
+        await fetchProducts();
+      } else {
+        _showSnackBar(result['error'] ?? "Gagal menambahkan produk", isError: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isProcessing = false);
+      _showSnackBar("Error: $e", isError: true);
+    }
+  }
+
+  // ================= UPDATE =================
+
+  Future<void> updateProduct(int id, int index) async {
+    if (isProcessing) return;
+
+    setState(() => isProcessing = true);
+
+    try {
+      final result = await _productApiService.updateProduct(
+        id: id,
+        barcode: _barcodeController.text.trim(),
+        name: _nameController.text.trim(),
+        categoryId: selectedCategory ?? 0,
+        supplierId: selectedSupplier ?? 0,
+        stockQuantity: int.tryParse(_stockController.text.trim()) ?? 0,
+        minStock: int.tryParse(_minStockController.text.trim()) ?? 0,
+        maxStock: 500,
+        unit: "pcs",
+        purchasePrice: 2500,
+        sellingPrice: int.tryParse(_priceController.text.trim()) ?? 0,
+      );
+
+      if (!mounted) return;
+
+      setState(() => isProcessing = false);
+
+      if (result['success'] == true) {
+        _showSnackBar("Produk berhasil diupdate");
+        clearForm();
+
+        if (result['data'] != null && index >= 0 && index < products.length) {
+          setState(() {
+            products[index] = result['data'];
+          });
+        }
+
+        await fetchProducts();
+      } else {
+        _showSnackBar(result['error'] ?? "Gagal mengupdate produk", isError: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isProcessing = false);
+      _showSnackBar("Error: $e", isError: true);
+    }
+  }
+
+  // ================= DELETE =================
+
+  Future<void> deleteProduct(int id, int index) async {
+    if (isProcessing) return;
+
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Hapus Produk'),
-        content: Text('Yakin ingin menghapus ${stocks[index]['name']}?'),
+        title: const Text('Konfirmasi'),
+        content: const Text('Apakah Anda yakin ingin menghapus produk ini?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Batal'),
           ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                stocks.removeAt(index);
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Produk berhasil dihapus!'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Hapus'),
           ),
         ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => isProcessing = true);
+
+    try {
+      final result = await _productApiService.deleteProduct(id);
+
+      if (!mounted) return;
+
+      setState(() => isProcessing = false);
+
+      if (result['success'] == true) {
+        _showSnackBar("Produk berhasil dihapus");
+        clearForm();
+
+        if (index >= 0 && index < products.length) {
+          setState(() {
+            products.removeAt(index);
+          });
+        }
+
+        await fetchProducts();
+      } else {
+        _showSnackBar(result['error'] ?? "Gagal menghapus produk", isError: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isProcessing = false);
+      _showSnackBar("Error: $e", isError: true);
+    }
+  }
+
+  // ================= HELPER =================
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isError ? Colors.red : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void clearForm() {
+    _nameController.clear();
+    _barcodeController.clear();
+    _stockController.clear();
+    _minStockController.clear();
+    _priceController.clear();
+    selectedCategory = null;
+    selectedSupplier = null;
+    clearImage();
+  }
+
+  String _generateBarcode() {
+    final random = DateTime.now().millisecondsSinceEpoch;
+    final barcode = (random % 9999999999999).toString().padLeft(13, '0');
+    return barcode;
+  }
+
+  void showForm({Map<String, dynamic>? item, int? index}) {
+    _nameController.text = item?['name'] ?? "";
+    _barcodeController.text = item?['barcode'] ?? _generateBarcode();
+    _stockController.text = item?['stock_quantity']?.toString() ?? "";
+    _minStockController.text = item?['min_stock']?.toString() ?? "";
+    _priceController.text = item?['selling_price']?.toString() ?? "";
+    selectedCategory = item?['category_id'];
+    selectedSupplier = item?['supplier_id'];
+    clearImage();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      item == null ? "Tambah Produk Baru" : "Edit Produk",
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(dialogContext),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // ========== IMAGE SECTION ==========
+                Container(
+                  width: double.infinity,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Colors.grey[300]!,
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.grey[100],
+                  ),
+                  child: selectedImage != null
+                      ? Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                selectedImage!,
+                                width: double.infinity,
+                                height: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: GestureDetector(
+                                onTap: clearImage,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : item?['image'] != null && item?['image'] != ''
+                          ? Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(
+                                    item?['image'] ?? '',
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              LucideIcons.image,
+                                              size: 48,
+                                              color: Colors.grey[400],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Gagal memuat gambar',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: GestureDetector(
+                                    onTap: clearImage,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    LucideIcons.image,
+                                    size: 48,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Belum ada gambar',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                ),
+                const SizedBox(height: 12),
+
+                // ========== IMAGE PICKER BUTTONS ==========
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: isProcessing ? null : pickImage,
+                        icon: const Icon(LucideIcons.image),
+                        label: const Text('Galeri'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: isProcessing ? null : takePhoto,
+                        icon: const Icon(LucideIcons.camera),
+                        label: const Text('Kamera'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // ========== FORM FIELDS ==========
+                TextField(
+                  controller: _barcodeController,
+                  readOnly: item != null,
+                  decoration: InputDecoration(
+                    labelText: "Barcode",
+                    prefixIcon: const Icon(LucideIcons.scan),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    suffixIcon: item == null
+                        ? IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () {
+                              setState(() {
+                                _barcodeController.text = _generateBarcode();
+                              });
+                            },
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: "Nama Produk",
+                    prefixIcon: const Icon(LucideIcons.package),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _stockController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: "Stok",
+                          prefixIcon: const Icon(LucideIcons.box),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _minStockController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: "Min Stok",
+                          prefixIcon: const Icon(LucideIcons.alertTriangle),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _priceController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: "Harga Jual",
+                    prefixIcon: const Icon(LucideIcons.dollarSign),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  // ignore: deprecated_member_use
+                  value: selectedCategory,
+                  hint: const Text("Pilih Kategori"),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(LucideIcons.tag),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: categories
+                      .map<DropdownMenuItem<int>>(
+                        (e) => DropdownMenuItem<int>(
+                          value: e['id'] as int,
+                          child: Text(e['name'] ?? 'Unknown'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) => setState(() => selectedCategory = val),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  // ignore: deprecated_member_use
+                  value: selectedSupplier,
+                  hint: const Text("Pilih Supplier"),
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(LucideIcons.building2),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: suppliers
+                      .map<DropdownMenuItem<int>>(
+                        (e) => DropdownMenuItem<int>(
+                          value: e['id'] as int,
+                          child: Text(
+                            e['name'] ?? 'Unknown',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) => setState(() => selectedSupplier = val),
+                ),
+                const SizedBox(height: 24),
+
+                // ========== ACTION BUTTONS ==========
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: isProcessing
+                            ? null
+                            : () => Navigator.pop(dialogContext),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text("Batal"),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: isProcessing
+                            ? null
+                            : () async {
+                                Navigator.pop(dialogContext);
+
+                                if (item == null) {
+                                  await createProduct();
+                                } else {
+                                  await updateProduct(
+                                    item['id'] as int,
+                                    index ?? -1,
+                                  );
+                                }
+                              },
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: const Color(0xffa855f7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: isProcessing
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : const Text("Simpan"),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final totalStock = products.fold<int>(
+      0,
+      (sum, item) => sum + ((item['stock_quantity'] as num?)?.toInt() ?? 0),
+    );
+    final lowStock = products
+        .where(
+          (e) =>
+              ((e['stock_quantity'] as num?)?.toInt() ?? 0) <=
+              ((e['min_stock'] as num?)?.toInt() ?? 0),
+        )
+        .length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manajemen Gudang'),
         backgroundColor: const Color(0xffa855f7),
         foregroundColor: Colors.white,
-        actions: [], // <-- hapus icon + di kanan atas
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.refreshCw),
+            onPressed: isLoading ? null : fetchProducts,
+            tooltip: 'Refresh',
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.tag),
+            onPressed: () async {
+              await Navigator.pushNamed(context, '/categories');
+              await fetchCategories();
+            },
+            tooltip: 'Manajemen Kategori',
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.building2),
+            onPressed: () async {
+              await Navigator.pushNamed(context, '/suppliers');
+              await fetchSuppliers();
+            },
+            tooltip: 'Manajemen Supplier',
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddDialog,
+        onPressed: isProcessing
+            ? null
+            : () {
+                clearForm();
+                showForm();
+              },
         backgroundColor: const Color(0xffa855f7),
         icon: const Icon(LucideIcons.plus),
         label: const Text('Tambah Produk'),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xfff8fafc), Color(0xffe2e8f0)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Column(
-          children: [
-            // Summary
-            Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xffa855f7), Color(0xff7e22ce)],
+      body: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xffa855f7), Color(0xff7e22ce)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  // ignore: deprecated_member_use
+                  color: const Color(0xffa855f7).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _summaryItem('Total Produk', '${stocks.length}', LucideIcons.package),
-                  Container(width: 1, height: 40, color: Colors.white24),
-                  _summaryItem('Total Stok', '${stocks.fold(0, (sum, item) => sum + (item['stock'] as int))}', LucideIcons.box),
-                  Container(width: 1, height: 40, color: Colors.white24),
-                  _summaryItem('Low Stock', '${stocks.where((item) => item['stock'] <= item['minStock']).length}', LucideIcons.alertTriangle),
-                ],
-              ),
+              ],
             ),
-            
-            // Stock List
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.shade300,
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _summaryItem(
+                  'Total Produk',
+                  '${products.length}',
+                  LucideIcons.package,
                 ),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          topRight: Radius.circular(12),
+                _summaryItem(
+                  'Total Stok',
+                  '$totalStock',
+                  LucideIcons.box,
+                ),
+                _summaryItem(
+                  'Low Stock',
+                  '$lowStock',
+                  LucideIcons.alertTriangle,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : products.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              LucideIcons.package,
+                              size: 64,
+                              color: Colors.grey[300],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Belum ada produk',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: fetchProducts,
+                              icon: const Icon(LucideIcons.refreshCw),
+                              label: const Text('Refresh'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: fetchProducts,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(8),
+                          itemCount: products.length,
+                          itemBuilder: (_, i) {
+                            final item = products[i];
+                            final stock = (item['stock_quantity'] as num?)?.toInt() ?? 0;
+                            final minStock = (item['min_stock'] as num?)?.toInt() ?? 0;
+                            final isLow = stock <= minStock;
+
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                title: Text(
+                                  item['name'] ?? 'Unknown',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            LucideIcons.box,
+                                            size: 14,
+                                            color: Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Stok: $stock',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            LucideIcons.tag,
+                                            size: 14,
+                                            color: Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Kategori: ${item['categories']?['name'] ?? '-'}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                leading: Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    color: Colors.grey[200],
+                                  ),
+                                  child: item['image'] != null && item['image'] != ''
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.network(
+                                            item['image'],
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                              return Icon(
+                                                LucideIcons.image,
+                                                color: Colors.grey[400],
+                                              );
+                                            },
+                                          ),
+                                        )
+                                      : Icon(
+                                          LucideIcons.image,
+                                          color: Colors.grey[400],
+                                        ),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(LucideIcons.edit),
+                                      color: Colors.blue,
+                                      onPressed: isProcessing
+                                          ? null
+                                          : () => showForm(item: item, index: i),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(LucideIcons.trash2),
+                                      color: Colors.red,
+                                      onPressed: isProcessing
+                                          ? null
+                                          : () => deleteProduct(
+                                                item['id'] as int,
+                                                i,
+                                              ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                      child: const Row(
-                        children: [
-                          Expanded(flex: 3, child: Text('Produk', style: TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(flex: 2, child: Text('Kategori', style: TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(child: Text('Stok', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-                          Expanded(flex: 2, child: Text('Aksi', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.separated(
-                        itemCount: stocks.length,
-                        separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade200),
-                        itemBuilder: (context, index) {
-                          final item = stocks[index];
-                          final isLowStock = item['stock'] <= item['minStock'];
-                          
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.purple.shade50,
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Icon(
-                                          LucideIcons.package,
-                                          color: Colors.purple.shade700,
-                                          size: 20,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          item['name'],
-                                          style: const TextStyle(fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.shade50,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      item['category'],
-                                      style: TextStyle(
-                                        color: Colors.blue.shade700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isLowStock ? Colors.red.shade50 : Colors.green.shade50,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      '${item['stock']}',
-                                      style: TextStyle(
-                                        color: isLowStock ? Colors.red.shade700 : Colors.green.shade700,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(LucideIcons.edit, size: 18),
-                                        onPressed: () => _showEditDialog(index),
-                                        color: Colors.blue,
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(LucideIcons.trash2, size: 18),
-                                        onPressed: () => _deleteItem(index),
-                                        color: Colors.red,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 80),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -409,22 +1001,27 @@ class _ManagementScreenState extends State<ManagementScreen> {
   Widget _summaryItem(String label, String value, IconData icon) {
     return Column(
       children: [
-        Icon(icon, color: Colors.white, size: 28),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            // ignore: deprecated_member_use
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: Colors.white, size: 24),
+        ),
         const SizedBox(height: 8),
         Text(
           value,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 24,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 12,
-          ),
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
         ),
       ],
     );
