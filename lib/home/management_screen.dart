@@ -797,11 +797,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.refreshCw),
-            onPressed: isLoading ? null : fetchProducts,
-            tooltip: 'Refresh',
-          ),
-          IconButton(
             icon: const Icon(LucideIcons.tag),
             onPressed: () async {
               await Navigator.pushNamed(context, '/categories');
@@ -816,6 +811,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
               await fetchSuppliers();
             },
             tooltip: 'Manajemen Supplier',
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.logOut, color: Colors.white),
+            onPressed: () {
+              _showLogoutDialog();
+            },
+            tooltip: 'Logout',
           ),
         ],
       ),
@@ -1030,6 +1032,38 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       },
                     ),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Apakah Anda yakin ingin logout?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                (route) => false,
+              );
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Logout'),
           ),
         ],
       ),

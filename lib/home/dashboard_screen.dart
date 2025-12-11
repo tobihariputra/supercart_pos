@@ -318,9 +318,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             tooltip: 'Sales Report',
           ),
           IconButton(
-            icon: const Icon(LucideIcons.refreshCw, color: Colors.white),
-            onPressed: _loadDashboardData,
-            tooltip: 'Refresh',
+            icon: const Icon(LucideIcons.logOut, color: Colors.white),
+            onPressed: () {
+              _showLogoutDialog();
+            },
+            tooltip: 'Logout',
           ),
         ],
       ),
@@ -794,6 +796,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Apakah Anda yakin ingin logout?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                (route) => false,
+              );
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Logout'),
+          ),
         ],
       ),
     );
