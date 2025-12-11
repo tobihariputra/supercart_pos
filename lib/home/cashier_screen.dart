@@ -1,10 +1,17 @@
-// ignore_for_file: deprecated_member_use, unused_element
+// ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supercart_pos/services/transactions_api_services.dart';
 import 'package:supercart_pos/core/app_config.dart';
+import 'package:intl/intl.dart';
+
+final rupiah = NumberFormat.currency(
+  locale: 'id',
+  symbol: 'Rp ',
+  decimalDigits: 0,
+);
 
 class Product {
   final String id;
@@ -12,6 +19,7 @@ class Product {
   final double price;
   final String category;
   final String image;
+  final String? imageUrlPresigned;
 
   Product({
     required this.id,
@@ -19,6 +27,7 @@ class Product {
     required this.price,
     required this.category,
     required this.image,
+    this.imageUrlPresigned,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -26,8 +35,12 @@ class Product {
       id: json['id']?.toString() ?? '',
       name: json['name'] ?? 'Unknown',
       price: double.tryParse(json['selling_price']?.toString() ?? '0') ?? 0.0,
-      category: json['category'] ?? 'General',
-      image: json['image'] ?? 'https://via.placeholder.com/400',
+      category: json['category'] ?? json['categories']?['name'] ?? 'General',
+      image:
+          json['image_url'] ??
+          json['image'] ??
+          'https://via.placeholder.com/400',
+      imageUrlPresigned: json['image_url_presigned'],
     );
   }
 }
@@ -38,6 +51,7 @@ class CartItem {
   final double price;
   int quantity;
   final String image;
+  final String? imageUrlPresigned;
 
   CartItem({
     required this.id,
@@ -45,6 +59,7 @@ class CartItem {
     required this.price,
     required this.quantity,
     required this.image,
+    this.imageUrlPresigned,
   });
 }
 
@@ -89,7 +104,6 @@ class _CashierScreenState extends State<CashierScreen>
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
 
-    // Setup interceptor untuk auto-add token
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -123,9 +137,7 @@ class _CashierScreenState extends State<CashierScreen>
         _errorMessage = null;
       });
 
-      final response = await _dio.get(
-        '${AppConfig.baseUrl}/products/fetch',
-      );
+      final response = await _dio.get('${AppConfig.baseUrl}/products/fetch');
 
       if (response.statusCode == 200) {
         final jsonData = response.data;
@@ -133,12 +145,10 @@ class _CashierScreenState extends State<CashierScreen>
         List<Product> products = [];
         Set<String> categorySet = {'All'};
 
-        // Parse response sesuai struktur API
         if (jsonData['result'] != null && jsonData['result']['data'] != null) {
           final List<dynamic> items = jsonData['result']['data'];
           products = items.map((item) => Product.fromJson(item)).toList();
 
-          // Extract unique categories
           for (var product in products) {
             categorySet.add(product.category);
           }
@@ -190,6 +200,7 @@ class _CashierScreenState extends State<CashierScreen>
             price: product.price,
             quantity: 1,
             image: product.image,
+            imageUrlPresigned: product.imageUrlPresigned,
           ),
         );
       }
@@ -290,16 +301,13 @@ class _CashierScreenState extends State<CashierScreen>
             ),
           );
 
-          // Save transaction details for dialog
           final totalItems = transactionData['total_items'];
           final totalAmount = transactionData['total_amount'];
 
-          // Clear cart
           setState(() {
             _cart.clear();
           });
 
-          // Show success dialog
           showDialog(
             context: context,
             barrierDismissible: false,
@@ -308,27 +316,46 @@ class _CashierScreenState extends State<CashierScreen>
                 children: [
                   Icon(Icons.check_circle, color: Colors.green[600], size: 28),
                   const SizedBox(width: 8),
-                  const Text('Transaction Successful'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildDialogRow('Transaction No:', transactionNo),
-                  const SizedBox(height: 8),
-                  _buildDialogRow('Total Items:', '$totalItems'),
-                  const SizedBox(height: 8),
-                  _buildDialogRow('Total Amount:', 'Rp $totalAmount'),
-                  const SizedBox(height: 8),
-                  _buildDialogRow('Payment:', paymentMethod.toUpperCase()),
-                  const SizedBox(height: 8),
-                  _buildDialogRow(
-                    'Payment Amount:',
-                    'Rp ${paymentAmount.toStringAsFixed(0)}',
+
+                  // ⬇️ Tambahan kecil untuk cegah overflow
+                  const Expanded(
+                    child: Text(
+                      'Transaction Successful',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
+
+              // ⬇️ Tambahan kecil: bungkus content agar tidak overflow
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildDialogRow('Transaction No:', transactionNo),
+                    const SizedBox(height: 8),
+
+                    _buildDialogRow('Total Items:', '$totalItems'),
+                    const SizedBox(height: 8),
+
+                    _buildDialogRow(
+                      'Total Amount:',
+                      'Rp ${double.parse(totalAmount).toStringAsFixed(0)}',
+                    ),
+                    const SizedBox(height: 8),
+
+                    _buildDialogRow('Payment:', paymentMethod.toUpperCase()),
+                    const SizedBox(height: 8),
+
+                    _buildDialogRow(
+                      'Payment Amount:',
+                      'Rp ${double.parse(paymentAmount.toStringAsFixed(0)).toStringAsFixed(0)}',
+                    ),
+                  ],
+                ),
+              ),
+
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
@@ -425,7 +452,6 @@ class _CashierScreenState extends State<CashierScreen>
                 ),
                 const SizedBox(height: 16),
 
-                // Payment method radio buttons
                 Column(
                   children: [
                     RadioListTile<String>(
@@ -456,7 +482,6 @@ class _CashierScreenState extends State<CashierScreen>
                 ),
                 const SizedBox(height: 16),
 
-                // Payment amount
                 const Text(
                   'Payment Amount',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -475,7 +500,6 @@ class _CashierScreenState extends State<CashierScreen>
                 ),
                 const SizedBox(height: 16),
 
-                // Notes
                 const Text(
                   'Notes (Optional)',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -493,7 +517,6 @@ class _CashierScreenState extends State<CashierScreen>
                 ),
                 const SizedBox(height: 16),
 
-                // Order Summary
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -544,7 +567,6 @@ class _CashierScreenState extends State<CashierScreen>
                 ),
                 const SizedBox(height: 20),
 
-                // Action buttons
                 Row(
                   children: [
                     Expanded(
@@ -559,7 +581,8 @@ class _CashierScreenState extends State<CashierScreen>
                         onPressed: _isProcessing
                             ? null
                             : () {
-                                final paymentAmount = double.tryParse(
+                                final paymentAmount =
+                                    double.tryParse(
                                       amountController.text.replaceAll(
                                         RegExp(r'[^0-9]'),
                                         '',
@@ -629,27 +652,18 @@ class _CashierScreenState extends State<CashierScreen>
         child: SafeArea(
           child: Column(
             children: [
-              // Header
               _buildHeader(),
-
-              // Search Bar
               _buildSearchBar(),
-
-              // Categories
               _buildCategories(),
-
-              // Products Grid or Loading/Error
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : _errorMessage != null
-                        ? _buildErrorWidget()
-                        : _filteredProducts.isEmpty
-                            ? _buildNoProductsWidget()
-                            : _buildProductsGrid(),
+                    ? _buildErrorWidget()
+                    : _filteredProducts.isEmpty
+                    ? _buildNoProductsWidget()
+                    : _buildProductsGrid(),
               ),
-
-              // Cart Summary
               if (_cart.isNotEmpty) _buildCartSummary(),
               if (_cart.isEmpty && !_isLoading) _buildEmptyCart(),
             ],
@@ -675,10 +689,7 @@ class _CashierScreenState extends State<CashierScreen>
             ),
           ),
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _fetchProducts,
-            child: const Text('Retry'),
-          ),
+          ElevatedButton(onPressed: _fetchProducts, child: const Text('Retry')),
           if (_errorMessage?.contains('Unauthorized') == true) ...[
             const SizedBox(height: 8),
             TextButton(
@@ -919,6 +930,8 @@ class _CashierScreenState extends State<CashierScreen>
       itemCount: _filteredProducts.length,
       itemBuilder: (context, index) {
         final product = _filteredProducts[index];
+        final imageUrl = product.imageUrlPresigned ?? product.image;
+
         return GestureDetector(
           onTap: () => _addToCart(product),
           child: Container(
@@ -954,7 +967,7 @@ class _CashierScreenState extends State<CashierScreen>
                             topRight: Radius.circular(20),
                           ),
                           child: Image.network(
-                            product.image,
+                            imageUrl,
                             width: double.infinity,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
@@ -1034,174 +1047,192 @@ class _CashierScreenState extends State<CashierScreen>
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(30),
+          topRight: Radius.circular(30),
+        ),
+        border: Border(top: BorderSide(color: Colors.blue[600]!, width: 4)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
+            blurRadius: 20,
             offset: const Offset(0, -4),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Cart Items Preview
-          SizedBox(
-            height: 100,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _cart.length,
-              itemBuilder: (context, index) {
-                final item = _cart[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Container(
-                    width: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[300]!),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "Current Order",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    "${_cart.fold(0, (sum, item) => sum + item.quantity)} items",
+                    style: TextStyle(
+                      color: Colors.blue[700],
+                      fontWeight: FontWeight.bold,
                     ),
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Cart Items List
+            SizedBox(
+              height: 160,
+              child: ListView.builder(
+                itemCount: _cart.length,
+                itemBuilder: (context, index) {
+                  final item = _cart[index];
+                  final itemImageUrl = item.imageUrlPresigned ?? item.image;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
                       children: [
-                        Text(
-                          item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            itemImageUrl,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 40,
+                              height: 40,
+                              color: Colors.grey[300],
+                              child: const Icon(Icons.image),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Rp ${item.price.toStringAsFixed(0)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.blue[600],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            GestureDetector(
-                              onTap: () => _updateQuantity(item.id, -1),
-                              child: Container(
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  color: Colors.red[300],
-                                  borderRadius: BorderRadius.circular(4),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
                                 ),
-                                child: const Icon(Icons.remove,
-                                    size: 14, color: Colors.white),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
+                              Text(
+                                "Rp${item.price.toStringAsFixed(0)}",
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => _updateQuantity(item.id, -1),
+                              icon: const Icon(Icons.remove_circle_outline),
+                              color: Colors.red[400],
                             ),
                             Text(
-                              '${item.quantity}',
+                              item.quantity.toString(),
                               style: const TextStyle(
-                                fontSize: 12,
                                 fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
                             ),
-                            GestureDetector(
-                              onTap: () => _updateQuantity(item.id, 1),
-                              child: Container(
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  color: Colors.green[300],
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Icon(Icons.add,
-                                    size: 14, color: Colors.white),
-                              ),
+                            IconButton(
+                              onPressed: () => _updateQuantity(item.id, 1),
+                              icon: const Icon(Icons.add_circle_outline),
+                              color: Colors.green[400],
                             ),
                           ],
                         ),
+                        IconButton(
+                          onPressed: () => _removeFromCart(item.id),
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                        ),
                       ],
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          const Divider(height: 1),
-          const SizedBox(height: 12),
 
-          // Summary
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Subtotal',
-                style: TextStyle(color: Color(0xFF64748B)),
-              ),
-              Text(
-                'Rp ${_subtotal.toStringAsFixed(0)}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Tax (10%)',
-                style: TextStyle(color: Color(0xFF64748B)),
-              ),
-              Text(
-                'Rp ${_tax.toStringAsFixed(0)}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          const Divider(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Total',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+            const Divider(),
+            _summaryRow("Subtotal", _subtotal),
+            _summaryRow("Tax (10%)", _tax),
+            const Divider(),
+            _summaryRow("Total", _total, isBold: true),
+
+            const SizedBox(height: 12),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.payment, color: Colors.white),
+                label: const Text(
+                  "Proceed to Payment",
+                  style: TextStyle(color: Colors.white),
                 ),
-              ),
-              Text(
-                'Rp ${_total.toStringAsFixed(0)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: Colors.blue[600],
+                onPressed: _showPaymentDialog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xff2563eb),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _showPaymentDialog,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[600],
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: const Text(
-              'Checkout',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, double value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              fontSize: isBold ? 16 : 14,
+            ),
+          ),
+          Text(
+            "Rp${value.toStringAsFixed(0)}",
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              fontSize: isBold ? 16 : 14,
+              color: isBold ? const Color(0xff2563eb) : null,
             ),
           ),
         ],
@@ -1211,35 +1242,11 @@ class _CashierScreenState extends State<CashierScreen>
 
   Widget _buildEmptyCart() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
       padding: const EdgeInsets.all(16),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.shopping_cart_outlined,
-              size: 48,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Keranjang kosong',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 16,
-              ),
-            ),
-          ],
+      child: const Center(
+        child: Text(
+          "Keranjang masih kosong",
+          style: TextStyle(color: Colors.grey, fontSize: 14),
         ),
       ),
     );
