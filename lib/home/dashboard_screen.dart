@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:supercart_pos/services/dashboard_api_services.dart';
+import 'package:intl/intl.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -54,31 +55,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() {
           // My Performance
           final myPerf = data['my_performance'] ?? {};
-          _myTotalSales = (myPerf['total_sales'] ?? 0).toDouble();
-          _myTotalTransactions = myPerf['total_transactions'] ?? 0;
-          _myTotalItems = myPerf['total_items'] ?? 0;
-          _myAverageTransaction = (myPerf['average_transaction'] ?? 0).toDouble();
+          _myTotalSales = _toDouble(myPerf['total_sales']);
+          _myTotalTransactions = _toInt(myPerf['total_transactions']);
+          _myTotalItems = _toInt(myPerf['total_items']);
+          _myAverageTransaction = _toDouble(myPerf['average_transaction']);
           
           // Overall Performance
           final overallPerf = data['overall_performance'] ?? {};
-          _overallTotalSales = (overallPerf['total_sales'] ?? 0).toDouble();
-          _overallTotalTransactions = overallPerf['total_transactions'] ?? 0;
-          _overallTotalItems = overallPerf['total_items'] ?? 0;
-          _overallAverageTransaction = (overallPerf['average_transaction'] ?? 0).toDouble();
+          _overallTotalSales = _toDouble(overallPerf['total_sales']);
+          _overallTotalTransactions = _toInt(overallPerf['total_transactions']);
+          _overallTotalItems = _toInt(overallPerf['total_items']);
+          _overallAverageTransaction = _toDouble(overallPerf['average_transaction']);
           
           // Payment Methods
           if (data['payment_methods'] != null && data['payment_methods'] is List) {
-            _paymentMethods = List<Map<String, dynamic>>.from(data['payment_methods']);
+            _paymentMethods = List<Map<String, dynamic>>.from(
+              (data['payment_methods'] as List).map((e) => _toMap(e))
+            );
           }
           
           // Top Products
           if (data['top_products'] != null && data['top_products'] is List) {
-            _topProducts = List<Map<String, dynamic>>.from(data['top_products']);
+            _topProducts = List<Map<String, dynamic>>.from(
+              (data['top_products'] as List).map((e) => _toMap(e))
+            );
           }
           
           // Hourly Sales
           if (data['hourly_sales'] != null && data['hourly_sales'] is List) {
-            _hourlySales = List<Map<String, dynamic>>.from(data['hourly_sales']);
+            _hourlySales = List<Map<String, dynamic>>.from(
+              (data['hourly_sales'] as List).map((e) => _toMap(e))
+            );
           }
           
           _isLoading = false;
@@ -95,6 +102,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  // Helper functions untuk convert type
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  Map<String, dynamic> _toMap(dynamic value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return {};
+  }
+
+  String _formatCurrency(double amount) {
+    final formatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+    return formatter.format(amount);
   }
 
   @override
@@ -204,19 +239,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildOverallPerformanceGrid(),
           const SizedBox(height: 20),
 
-          // Hourly Sales Chart (if data available)
+          // Hourly Sales Chart
           if (_hourlySales.isNotEmpty) ...[
             _buildHourlySalesChart(),
             const SizedBox(height: 20),
           ],
 
-          // Payment Methods (if data available)
+          // Payment Methods
           if (_paymentMethods.isNotEmpty) ...[
             _buildPaymentMethods(),
             const SizedBox(height: 20),
           ],
 
-          // Top Products (if data available)
+          // Top Products
           if (_topProducts.isNotEmpty) ...[
             _buildTopProducts(),
             const SizedBox(height: 20),
@@ -224,7 +259,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           // Quick Actions
           _buildQuickActions(),
-          const SizedBox(height: 80), // Extra padding for FAB
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -240,7 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -386,89 +421,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String value,
     required IconData icon,
     required List<Color> gradient,
-    String? trailing,
-    VoidCallback? onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: gradient),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withValues(alpha: 0.15),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: gradient),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.15),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
-          ],
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 24),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-                if (trailing != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      trailing,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ],
-        ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildHourlySalesChart() {
+    if (_hourlySales.isEmpty) {
+      return const SizedBox();
+    }
+
+    // Filter data yang valid
+    final validData = _hourlySales
+        .where((e) {
+          final sales = _toDouble(e['sales']);
+          return sales > 0;
+        })
+        .toList();
+
+    if (validData.isEmpty) {
+      return const SizedBox();
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -528,11 +550,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       showTitles: true,
                       getTitlesWidget: (value, meta) {
                         int index = value.toInt();
-                        if (index >= 0 && index < _hourlySales.length) {
+                        if (index >= 0 && index < validData.length) {
+                          final hour = _toInt(validData[index]['hour']);
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text(
-                              _hourlySales[index]['hour']?.toString() ?? '',
+                              '${hour}:00',
                               style: const TextStyle(
                                 fontSize: 10,
                                 color: Colors.grey,
@@ -554,10 +577,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: _hourlySales.asMap().entries.map((e) {
+                    spots: validData.asMap().entries.map((e) {
                       return FlSpot(
                         e.key.toDouble(),
-                        (e.value['sales'] ?? 0).toDouble(),
+                        _toDouble(e.value['sales']),
                       );
                     }).toList(),
                     isCurved: true,
@@ -607,17 +630,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 16),
           ..._paymentMethods.map((method) {
+            // Try different keys for method name
+            final methodName = method['method']?.toString() ?? 
+                             method['payment_method']?.toString() ?? 
+                             method['name']?.toString() ?? 
+                             method['type']?.toString() ??
+                             'Unknown';
+            
+            // Try different keys for total
+            final total = _toDouble(method['total'] ?? 
+                                   method['amount'] ?? 
+                                   method['total_amount'] ?? 
+                                   0);
+            
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    method['method']?.toString() ?? '',
+                    methodName,
                     style: const TextStyle(fontSize: 14),
                   ),
                   Text(
-                    _formatCurrency((method['total'] ?? 0).toDouble()),
+                    _formatCurrency(total),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -627,7 +663,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             );
-          }),
+          }).toList(),
         ],
       ),
     );
@@ -664,13 +700,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ..._topProducts.asMap().entries.map((entry) {
             final index = entry.key;
             final product = entry.value;
+            
+            // Extract product name dari berbagai kemungkinan struktur
+            String name = 'Unknown Product';
+            
+            // Cek apakah ada nested product object
+            if (product['product'] != null) {
+              final nestedProduct = product['product'];
+              if (nestedProduct is Map) {
+                name = nestedProduct['name']?.toString() ?? 'Unknown Product';
+              }
+            }
+            
+            // Fallback ke field langsung
+            if (name == 'Unknown Product') {
+              name = product['name']?.toString() ?? 
+                    product['product_name']?.toString() ?? 
+                    product['item_name']?.toString() ??
+                    'Unknown Product';
+            }
+            
+            // Try different keys for quantity
+            final quantity = _toInt(product['quantity'] ?? 
+                                   product['qty'] ?? 
+                                   product['total_quantity'] ?? 
+                                   0);
+            
+            // Try different keys for total sales
+            final totalSales = _toDouble(product['total_sales'] ?? 
+                                        product['total'] ?? 
+                                        product['amount'] ?? 
+                                        product['total_amount'] ?? 
+                                        0);
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
                   Container(
-                    width: 24,
-                    height: 24,
+                    width: 28,
+                    height: 28,
                     decoration: BoxDecoration(
                       color: const Color(0xff2563eb).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
@@ -692,14 +761,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          product['name']?.toString() ?? '',
+                          name,
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${product['quantity'] ?? 0} sold',
+                          '$quantity terjual',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
@@ -709,7 +780,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   Text(
-                    _formatCurrency((product['total_sales'] ?? 0).toDouble()),
+                    _formatCurrency(totalSales),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -719,7 +790,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             );
-          }),
+          }).toList(),
         ],
       ),
     );
@@ -802,17 +873,5 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
-  }
-
-  String _formatCurrency(double amount) {
-    if (amount >= 1000000) {
-      return '\$${(amount / 1000000).toStringAsFixed(1)}M';
-    } else if (amount >= 1000) {
-      return '\$${(amount / 1000).toStringAsFixed(1)}K';
-    } else if (amount == 0) {
-      return '\$0';
-    } else {
-      return '\$${amount.toStringAsFixed(0)}';
-    }
   }
 }
