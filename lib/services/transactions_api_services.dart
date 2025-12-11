@@ -524,4 +524,148 @@ class TransactionApiService {
       };
     }
   }
+
+  // Tambahkan method-method ini ke class TransactionApiService Anda yang sudah ada
+// Letakkan setelah method cancelTransaction()
+
+// ================= GET TRANSACTIONS (dengan filter untuk laporan) =================
+
+Future<Map<String, dynamic>> getTransactions({
+  int page = 1,
+  int limit = 1000,
+  String? search,
+  String? status,
+  String? startDate,
+  String? endDate,
+}) async {
+  try {
+    final queryParams = {
+      'page': page,
+      'limit': limit,
+      if (search != null) 'search': search,
+      if (status != null && status != 'Semua') 'status': status,
+      if (startDate != null) 'start_date': startDate,
+      if (endDate != null) 'end_date': endDate,
+    };
+
+    final response = await _dio.get(
+      '$baseUrl/transactions/fetch',
+      queryParameters: queryParams,
+    );
+
+    if (response.statusCode == 200) {
+      final data = _convertMapTypes(response.data);
+      
+      // Handle berbagai struktur response
+      var transactionData = data['result']?['data'];
+      
+      // Jika data adalah list
+      if (transactionData is List) {
+        return {
+          'success': true,
+          'data': transactionData,
+          'pagination': data['result']?['pagination'],
+        };
+      }
+      
+      // Jika data adalah object dengan key 'transactions'
+      if (transactionData is Map && transactionData.containsKey('transactions')) {
+        return {
+          'success': true,
+          'data': transactionData['transactions'] ?? [],
+          'pagination': transactionData['pagination'],
+        };
+      }
+      
+      // Jika data langsung adalah transaksi
+      if (transactionData is Map) {
+        return {
+          'success': true,
+          'data': [transactionData],
+          'pagination': data['result']?['pagination'],
+        };
+      }
+
+      return {
+        'success': true,
+        'data': [],
+        'pagination': data['result']?['pagination'],
+      };
+    }
+
+    return _handleErrorResponse(response.data, response.statusCode ?? 500);
+  } on DioException catch (e) {
+    if (e.type == DioExceptionType.connectionTimeout) {
+      return {'success': false, 'error': 'Koneksi timeout'};
+    } else if (e.type == DioExceptionType.receiveTimeout) {
+      return {'success': false, 'error': 'Server tidak merespon'};
+    } else if (e.response != null) {
+      return _handleErrorResponse(e.response!.data, e.response!.statusCode ?? 500);
+    }
+    return {'success': false, 'error': 'Gagal memuat transaksi: ${e.message}'};
+  } catch (e) {
+    return {'success': false, 'error': 'Gagal memuat transaksi: $e'};
+  }
+}
+
+// ================= GET TRANSACTION SUMMARY (untuk ringkasan laporan) =================
+
+Future<Map<String, dynamic>> getTransactionSummary({
+  String? startDate,
+  String? endDate,
+}) async {
+  try {
+    final queryParams = {
+      if (startDate != null) 'start_date': startDate,
+      if (endDate != null) 'end_date': endDate,
+    };
+
+    final response = await _dio.get(
+      '$baseUrl/transactions/summary',
+      queryParameters: queryParams,
+    );
+
+    if (response.statusCode == 200) {
+      final data = _convertMapTypes(response.data);
+      return {
+        'success': true,
+        'data': data['result']?['data'],
+      };
+    }
+
+    return _handleErrorResponse(response.data, response.statusCode ?? 500);
+  } on DioException catch (e) {
+    if (e.response != null) {
+      return _handleErrorResponse(e.response!.data, e.response!.statusCode ?? 500);
+    }
+    return {'success': false, 'error': 'Gagal memuat ringkasan: ${e.message}'};
+  } catch (e) {
+    return {'success': false, 'error': 'Gagal memuat ringkasan: $e'};
+  }
+}
+
+// ================= GET TRANSACTION BY ID (untuk detail laporan) =================
+
+Future<Map<String, dynamic>> getTransactionById(int id) async {
+  try {
+    final response = await _dio.get('$baseUrl/transactions/detail/$id');
+
+    if (response.statusCode == 200) {
+      final data = _convertMapTypes(response.data);
+      return {
+        'success': true,
+        'data': data['result']?['data'],
+      };
+    }
+
+    return _handleErrorResponse(response.data, response.statusCode ?? 500);
+  } on DioException catch (e) {
+    if (e.response != null) {
+      return _handleErrorResponse(e.response!.data, e.response!.statusCode ?? 500);
+    }
+    return {'success': false, 'error': 'Gagal memuat transaksi: ${e.message}'};
+  } catch (e) {
+    return {'success': false, 'error': 'Gagal memuat transaksi: $e'};
+  }
+}
 }
