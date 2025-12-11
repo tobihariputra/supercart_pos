@@ -138,6 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.pushNamed(context, '/cashier'),
         backgroundColor: const Color(0xff2563eb),
+        elevation: 8,
         icon: const Icon(LucideIcons.shoppingCart, color: Colors.white),
         label: const Text(
           "New Sale",
@@ -254,12 +255,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Top Products
           if (_topProducts.isNotEmpty) ...[
             _buildTopProducts(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 80),
           ],
-
-          // Quick Actions
-          _buildQuickActions(),
-          const SizedBox(height: 80),
         ],
       ),
     );
@@ -275,7 +272,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -316,8 +313,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           IconButton(
+            icon: const Icon(LucideIcons.fileText, color: Colors.white),
+            onPressed: () => Navigator.pushNamed(context, '/laporan'),
+            tooltip: 'Sales Report',
+          ),
+          IconButton(
             icon: const Icon(LucideIcons.refreshCw, color: Colors.white),
             onPressed: _loadDashboardData,
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -428,7 +431,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.15),
+            color: Colors.grey.withValues(alpha: 0.15),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -555,7 +558,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text(
-                              '${hour}:00',
+                              '$hour:00',
                               style: const TextStyle(
                                 fontSize: 10,
                                 color: Colors.grey,
@@ -663,7 +666,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -790,87 +793,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            "Quick Actions",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _actionButton(
-                label: "Sales Report",
-                icon: LucideIcons.fileText,
-                color: const Color(0xff7c3aed),
-                onTap: () => Navigator.pushNamed(context, '/laporan'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _actionButton(
-                label: "Manage Stock",
-                icon: LucideIcons.package,
-                color: const Color(0xffec4899),
-                onTap: () => Navigator.pushNamed(context, '/management'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _actionButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.shade100,
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
