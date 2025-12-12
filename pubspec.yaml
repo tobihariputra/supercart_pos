@@ -38,6 +38,7 @@ dependencies:
   cached_network_image: ^3.3.1
   animations: ^2.0.8
   skeletonizer: ^2.1.1
+  flutter_launcher_icons: ^0.14.4
 
 
 dev_dependencies:
@@ -50,4 +51,10 @@ flutter:
 
   assets:
     - assets/bg_kasir.png
+    - assets/icon/app_icon.png
     - .env
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
