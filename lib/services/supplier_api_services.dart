@@ -271,7 +271,7 @@ class SupplierApiService {
     try {
       debugPrint('🗑️ Deleting supplier: $id');
       
-      final response = await _dio.delete('$baseUrl/suppliers/$id');
+      final response = await _dio.delete('$baseUrl/suppliers/delete/$id');
 
       debugPrint('✅ Response status: ${response.statusCode}');
       debugPrint('📋 Response: ${response.data}');
