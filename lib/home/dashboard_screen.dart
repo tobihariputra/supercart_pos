@@ -1,7 +1,9 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:supercart_pos/services/dashboard_api_services.dart';
+import 'package:supercart_pos/services/transactions_api_services.dart';
 import 'package:intl/intl.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -13,26 +15,20 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardApiService _apiService = DashboardApiService();
+  final TransactionApiService _transactionApiService = TransactionApiService();
   
   bool _isLoading = true;
   String? _errorMessage;
   
-  // Data dari API - My Performance
-  double _myTotalSales = 0;
-  int _myTotalTransactions = 0;
-  int _myTotalItems = 0;
-  double _myAverageTransaction = 0;
-  
-  // Data dari API - Overall Performance
-  double _overallTotalSales = 0;
-  int _overallTotalTransactions = 0;
-  int _overallTotalItems = 0;
-  double _overallAverageTransaction = 0;
+  // Data untuk daily sales (overall performance)
+  double _totalDailySales = 0;
+  int _totalDailyTransactions = 0;
+  int _totalDailyItems = 0;
+  double _averageDailyTransaction = 0;
   
   // Data tambahan
   List<Map<String, dynamic>> _paymentMethods = [];
   List<Map<String, dynamic>> _topProducts = [];
-  List<Map<String, dynamic>> _hourlySales = [];
   
   @override
   void initState() {
@@ -47,25 +43,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      final response = await _apiService.getDashboardCashier();
+      // Load dashboard data
+      final dashboardResponse = await _apiService.getDashboardCashier();
+      
+      // Load transactions untuk daily sales chart
+      await _transactionApiService.getTransactions(limit: 1000);
 
-      if (response['success'] == true && response['data'] != null) {
-        final data = response['data'];
+
+      if (dashboardResponse['success'] == true && dashboardResponse['data'] != null) {
+        final data = dashboardResponse['data'];
         
         setState(() {
-          // My Performance
-          final myPerf = data['my_performance'] ?? {};
-          _myTotalSales = _toDouble(myPerf['total_sales']);
-          _myTotalTransactions = _toInt(myPerf['total_transactions']);
-          _myTotalItems = _toInt(myPerf['total_items']);
-          _myAverageTransaction = _toDouble(myPerf['average_transaction']);
-          
-          // Overall Performance
+          // Overall Performance (Penjualan Hari Ini)
           final overallPerf = data['overall_performance'] ?? {};
-          _overallTotalSales = _toDouble(overallPerf['total_sales']);
-          _overallTotalTransactions = _toInt(overallPerf['total_transactions']);
-          _overallTotalItems = _toInt(overallPerf['total_items']);
-          _overallAverageTransaction = _toDouble(overallPerf['average_transaction']);
+          _totalDailySales = _toDouble(overallPerf['total_sales']);
+          _totalDailyTransactions = _toInt(overallPerf['total_transactions']);
+          _totalDailyItems = _toInt(overallPerf['total_items']);
+          _averageDailyTransaction = _toDouble(overallPerf['average_transaction']);
           
           // Payment Methods
           if (data['payment_methods'] != null && data['payment_methods'] is List) {
@@ -80,22 +74,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               (data['top_products'] as List).map((e) => _toMap(e))
             );
           }
-          
-          // Hourly Sales
-          if (data['hourly_sales'] != null && data['hourly_sales'] is List) {
-            _hourlySales = List<Map<String, dynamic>>.from(
-              (data['hourly_sales'] as List).map((e) => _toMap(e))
-            );
-          }
-          
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = response['error'] ?? 'Gagal memuat data';
-          _isLoading = false;
         });
       }
+
+      setState(() {
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() {
         _errorMessage = 'Terjadi kesalahan: $e';
@@ -228,23 +212,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildHeader(),
           const SizedBox(height: 20),
 
-          // My Performance Section
-          _buildSectionTitle("My Performance"),
-          const SizedBox(height: 12),
-          _buildMyPerformanceGrid(),
+          // Daily Sales Summary
+          _buildDailySalesSummary(),
           const SizedBox(height: 20),
 
-          // Overall Performance Section
-          _buildSectionTitle("Overall Performance"),
-          const SizedBox(height: 12),
-          _buildOverallPerformanceGrid(),
-          const SizedBox(height: 20),
 
-          // Hourly Sales Chart
-          if (_hourlySales.isNotEmpty) ...[
-            _buildHourlySalesChart(),
-            const SizedBox(height: 20),
-          ],
 
           // Payment Methods
           if (_paymentMethods.isNotEmpty) ...[
@@ -272,7 +244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -283,7 +255,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.2),
+              color: Colors.blue.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -306,7 +278,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 Text(
-                  "Overview & Analytics",
+                  "Penjualan Harian",
                   style: TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
@@ -329,181 +301,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Color(0xff1e293b),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMyPerformanceGrid() {
-    return GridView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.3,
-      ),
-      children: [
-        _metricCard(
-          title: "My Total Sales",
-          value: _formatCurrency(_myTotalSales),
-          icon: LucideIcons.dollarSign,
-          gradient: const [Color(0xff3b82f6), Color(0xff2563eb)],
-        ),
-        _metricCard(
-          title: "My Transactions",
-          value: "$_myTotalTransactions",
-          icon: LucideIcons.shoppingCart,
-          gradient: const [Color(0xffa855f7), Color(0xff7e22ce)],
-        ),
-        _metricCard(
-          title: "Items Sold",
-          value: "$_myTotalItems",
-          icon: LucideIcons.package,
-          gradient: const [Color(0xffec4899), Color(0xffbe185d)],
-        ),
-        _metricCard(
-          title: "Avg Transaction",
-          value: _formatCurrency(_myAverageTransaction),
-          icon: LucideIcons.trendingUp,
-          gradient: const [Color(0xfff59e0b), Color(0xffd97706)],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOverallPerformanceGrid() {
-    return GridView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.3,
-      ),
-      children: [
-        _metricCard(
-          title: "Total Sales",
-          value: _formatCurrency(_overallTotalSales),
-          icon: LucideIcons.dollarSign,
-          gradient: const [Color(0xff10b981), Color(0xff059669)],
-        ),
-        _metricCard(
-          title: "Total Transactions",
-          value: "$_overallTotalTransactions",
-          icon: LucideIcons.shoppingBag,
-          gradient: const [Color(0xff06b6d4), Color(0xff0891b2)],
-        ),
-        _metricCard(
-          title: "Total Items",
-          value: "$_overallTotalItems",
-          icon: LucideIcons.package2,
-          gradient: const [Color(0xff8b5cf6), Color(0xff7c3aed)],
-        ),
-        _metricCard(
-          title: "Avg Transaction",
-          value: _formatCurrency(_overallAverageTransaction),
-          icon: LucideIcons.barChart3,
-          gradient: const [Color(0xffef4444), Color(0xffdc2626)],
-        ),
-      ],
-    );
-  }
-
-  Widget _metricCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required List<Color> gradient,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: gradient),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHourlySalesChart() {
-    if (_hourlySales.isEmpty) {
-      return const SizedBox();
-    }
-
-    // Filter data yang valid
-    final validData = _hourlySales
-        .where((e) {
-          final sales = _toDouble(e['sales']);
-          return sales > 0;
-        })
-        .toList();
-
-    if (validData.isEmpty) {
-      return const SizedBox();
-    }
-
+  Widget _buildDailySalesSummary() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          colors: [Color(0xff2563eb), Color(0xff7c3aed)],
+        ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade200,
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -514,97 +322,78 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           const Row(
             children: [
-              Icon(LucideIcons.clock, size: 20, color: Color(0xff2563eb)),
-              SizedBox(width: 8),
+              Icon(
+                LucideIcons.calendar,
+                color: Colors.white,
+                size: 24,
+              ),
+              SizedBox(width: 12),
               Text(
-                "Hourly Sales",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                'Penjualan Hari Ini',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 200,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(color: Colors.grey.shade200, strokeWidth: 1);
-                  },
-                ),
-                titlesData: FlTitlesData(
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 50,
-                      getTitlesWidget: (value, meta) {
-                        return Text(
-                          _formatCurrency(value),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) {
-                        int index = value.toInt();
-                        if (index >= 0 && index < validData.length) {
-                          final hour = _toInt(validData[index]['hour']);
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(
-                              '$hour:00',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          );
-                        }
-                        return const SizedBox();
-                      },
-                    ),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: validData.asMap().entries.map((e) {
-                      return FlSpot(
-                        e.key.toDouble(),
-                        _toDouble(e.value['sales']),
-                      );
-                    }).toList(),
-                    isCurved: true,
-                    color: const Color(0xff2563eb),
-                    barWidth: 3,
-                    dotData: const FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: const Color(0xff2563eb).withValues(alpha: 0.1),
-                    ),
-                  ),
-                ],
-              ),
+          const SizedBox(height: 16),
+          Text(
+            _formatCurrency(_totalDailySales),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
             ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _summaryItem(
+                label: 'Transaksi',
+                value: '$_totalDailyTransactions',
+              ),
+              _summaryItem(
+                label: 'Item Terjual',
+                value: '$_totalDailyItems',
+              ),
+              _summaryItem(
+                label: 'Rata-rata',
+                value: _formatCurrency(_averageDailyTransaction),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  Widget _summaryItem({required String label, required String value}) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white54,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+
 
   Widget _buildPaymentMethods() {
     return Container(
@@ -628,34 +417,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Icon(LucideIcons.creditCard, size: 20, color: Color(0xff2563eb)),
               SizedBox(width: 8),
               Text(
-                "Payment Methods",
+                "Metode Pembayaran",
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(height: 16),
           ..._paymentMethods.map((method) {
-            // Try different keys for method name
-            final methodName = method['method']?.toString() ?? 
-                             method['payment_method']?.toString() ?? 
+            final methodName = method['payment_method']?.toString() ?? 
+                             method['method']?.toString() ?? 
                              method['name']?.toString() ?? 
-                             method['type']?.toString() ??
                              'Unknown';
             
-            // Try different keys for total
-            final total = _toDouble(method['total'] ?? 
+            final total = _toDouble(method['total_amount'] ?? 
+                                   method['total'] ?? 
                                    method['amount'] ?? 
-                                   method['total_amount'] ?? 
                                    0);
+            
+            final transactionCount = _toInt(method['transaction_count'] ?? 0);
             
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    methodName,
-                    style: const TextStyle(fontSize: 14),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        methodName,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        '$transactionCount transaksi',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
                   ),
                   Text(
                     _formatCurrency(total),
@@ -696,7 +499,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Icon(LucideIcons.trendingUp, size: 20, color: Color(0xff2563eb)),
               SizedBox(width: 8),
               Text(
-                "Top Products",
+                "Produk Top",
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ],
@@ -706,37 +509,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final index = entry.key;
             final product = entry.value;
             
-            // Extract product name dari berbagai kemungkinan struktur
+            // Extract product information
             String name = 'Unknown Product';
             
-            // Cek apakah ada nested product object
-            if (product['product'] != null) {
-              final nestedProduct = product['product'];
-              if (nestedProduct is Map) {
-                name = nestedProduct['name']?.toString() ?? 'Unknown Product';
-              }
+            if (product['product'] != null && product['product'] is Map) {
+              final prodMap = product['product'];
+              name = prodMap['name']?.toString() ?? 'Unknown Product';
             }
             
-            // Fallback ke field langsung
-            if (name == 'Unknown Product') {
-              name = product['name']?.toString() ?? 
-                    product['product_name']?.toString() ?? 
-                    product['item_name']?.toString() ??
-                    'Unknown Product';
-            }
-            
-            // Try different keys for quantity
-            final quantity = _toInt(product['quantity'] ?? 
-                                   product['qty'] ?? 
-                                   product['total_quantity'] ?? 
-                                   0);
-            
-            // Try different keys for total sales
-            final totalSales = _toDouble(product['total_sales'] ?? 
-                                        product['total'] ?? 
-                                        product['amount'] ?? 
-                                        product['total_amount'] ?? 
-                                        0);
+            final quantity = _toInt(product['total_quantity'] ?? 0);
+            final totalSales = _toDouble(product['total_sales'] ?? 0);
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -746,7 +528,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     width: 28,
                     height: 28,
                     decoration: BoxDecoration(
-                      color: const Color(0xff2563eb).withValues(alpha: 0.1),
+                      color: const Color(0xff2563eb).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Center(

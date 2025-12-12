@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supercart_pos/services/transactions_api_services.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
 
 class LaporanScreen extends StatefulWidget {
   const LaporanScreen({super.key});
@@ -13,7 +17,7 @@ class LaporanScreen extends StatefulWidget {
 }
 
 class _LaporanScreenState extends State<LaporanScreen> {
-  final TransactionApiService _transactionApiService = TransactionApiService();
+  final TransactionApiService _apiService = TransactionApiService();
   
   List<Map<String, dynamic>> transactions = [];
   List<Map<String, dynamic>> filteredTransactions = [];
@@ -35,7 +39,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
     setState(() => isLoading = true);
 
     try {
-      final result = await _transactionApiService.getTransactions(limit: 1000);
+      final result = await _apiService.getTransactions(limit: 1000);
 
       if (!mounted) return;
 
@@ -75,7 +79,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
       if (selectedDateRange != null) {
         try {
-          final transDate = DateTime.parse(t['created_at'].toString().split(' ')[0]);
+          final transDate = DateTime.parse(t['created_at'].toString().split(' ')[0].split('T')[0]);
           if (transDate.isBefore(selectedDateRange!.start) ||
               transDate.isAfter(selectedDateRange!.end)) {
             return false;
@@ -94,15 +98,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       searchQuery = value;
       _applyFilters();
     });
-  }
-
-  void _onStatusFilterChanged(String? value) {
-    if (value != null) {
-      setState(() {
-        selectedStatus = value;
-        _applyFilters();
-      });
-    }
   }
 
   Future<void> _selectDateRange() async {
@@ -166,7 +161,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
   String _formatDate(String? date) {
     if (date == null) return '-';
     try {
-      final dateTime = DateTime.parse(date);
+      // Ambil hanya bagian tanggal (sebelum T atau spasi)
+      String cleanDate = date.split('T')[0].split(' ')[0];
+      final dateTime = DateTime.parse(cleanDate);
       return DateFormat('dd MMM yyyy', 'id_ID').format(dateTime);
     } catch (e) {
       return date;
@@ -193,15 +190,165 @@ class _LaporanScreenState extends State<LaporanScreen> {
     }
 
     try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Mengekspor data...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Create CSV content
       StringBuffer csv = StringBuffer();
-      csv.writeln('ID,Nomor Transaksi,Tanggal,Total,Items,Status');
-      for (var t in filteredTransactions) {
+      csv.writeln('No,Nomor Transaksi,Tanggal,Total,Items,Status');
+      
+      for (int i = 0; i < filteredTransactions.length; i++) {
+        var t = filteredTransactions[i];
         csv.writeln(
-          '${t['id']},${t['transaction_no']},${_formatDate(t['created_at'])},${t['total_amount']},${t['items_count'] ?? 0},${t['status']}',
+          '${i + 1},"${t['transaction_no'] ?? t['id']}","${_formatDate(t['created_at'])}","${_formatCurrency(t['total_amount'])}","${t['items_count'] ?? 0}","${t['status'] ?? '-'}"',
         );
       }
-      _showSnackBar('Data siap untuk diekspor');
+
+      // Get directory to save file
+      Directory? directory;
+      try {
+        if (Platform.isAndroid) {
+          // Untuk Android, coba simpan di folder Downloads
+          directory = Directory('/storage/emulated/0/Download');
+          if (!await directory.exists()) {
+            directory = await getExternalStorageDirectory();
+          }
+        } else {
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } catch (e) {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      // Create filename with timestamp
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final filename = 'Laporan_Penjualan_$timestamp.csv';
+      final filePath = '${directory!.path}/$filename';
+
+      // Write file
+      final file = File(filePath);
+      await file.writeAsString(csv.toString(), encoding: utf8);
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      // Show success dialog with options
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Row(
+              children: [
+                Icon(LucideIcons.checkCircle, color: Colors.green),
+                SizedBox(width: 12),
+                Text('Berhasil'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('File berhasil diekspor!'),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Nama file:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          filename,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Lokasi:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          directory!.path,
+                          style: const TextStyle(fontSize: 11),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'File telah tersimpan di perangkat Anda.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup'),
+              ),
+              FilledButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: filePath));
+                  Navigator.pop(context);
+                  _showSnackBar('Path file disalin ke clipboard');
+                },
+                icon: const Icon(LucideIcons.copy, size: 18),
+                label: const Text('Salin Path'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xff7c3aed),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (e) {
+      // Close loading dialog if still open
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      
       _showSnackBar('Gagal mengekspor data: $e', isError: true);
     }
   }
@@ -233,16 +380,16 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 ),
               ),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
                     // ========== HEADER WITH STATS ==========
                     _buildStatsHeader(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // ========== FILTERS ==========
                     _buildFiltersSection(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // ========== TRANSACTIONS TABLE ==========
                     _buildTransactionsSection(),
@@ -287,6 +434,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
     required Color color,
   }) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -311,7 +459,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: Colors.white, size: 28),
+            child: Icon(icon, color: Colors.white, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -326,15 +474,15 @@ class _LaporanScreenState extends State<LaporanScreen> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   value,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -347,7 +495,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
   Widget _buildFiltersSection() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -371,53 +519,36 @@ class _LaporanScreenState extends State<LaporanScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          
+          // Search Field
+          TextField(
+            decoration: InputDecoration(
+              hintText: 'Cari nomor transaksi...',
+              prefixIcon: const Icon(LucideIcons.search, size: 20),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xffe2e8f0)),
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              isDense: true,
+            ),
+            onChanged: _onSearchChanged,
+          ),
+          const SizedBox(height: 12),
+          
+          // Filter Buttons Row
           Row(
             children: [
               Expanded(
-                flex: 2,
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Cari nomor transaksi...',
-                    prefixIcon: const Icon(LucideIcons.search),
-                    border: OutlineInputBorder(
+                child: OutlinedButton.icon(
+                  onPressed: _selectDateRange,
+                  icon: const Icon(LucideIcons.calendar, size: 18),
+                  label: const Text('Tanggal'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xffe2e8f0)),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onChanged: _onSearchChanged,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: selectedStatus,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(LucideIcons.filter),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xffe2e8f0)),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  items: ['Semua', 'Pending', 'Selesai', 'Dibatalkan']
-                      .map((status) => DropdownMenuItem(
-                            value: status,
-                            child: Text(status),
-                          ))
-                      .toList(),
-                  onChanged: _onStatusFilterChanged,
-                ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: _selectDateRange,
-                icon: const Icon(LucideIcons.calendar),
-                label: const Text('Tanggal'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
@@ -425,27 +556,34 @@ class _LaporanScreenState extends State<LaporanScreen> {
               if (searchQuery.isNotEmpty ||
                   selectedStatus != 'Semua' ||
                   selectedDateRange != null)
-                OutlinedButton.icon(
-                  onPressed: _clearFilters,
-                  icon: const Icon(LucideIcons.x),
-                  label: const Text('Reset'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _clearFilters,
+                    icon: const Icon(LucideIcons.x, size: 18),
+                    label: const Text('Reset'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: _exportReport,
-                icon: const Icon(LucideIcons.download),
-                label: const Text('Export'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xff7c3aed),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+              if (searchQuery.isNotEmpty ||
+                  selectedStatus != 'Semua' ||
+                  selectedDateRange != null)
+                const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _exportReport,
+                  icon: const Icon(LucideIcons.download, size: 18),
+                  label: const Text('Export'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xff7c3aed),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),
@@ -526,7 +664,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 final t = filteredTransactions[index];
                 return InkWell(
                   onTap: () => _showTransactionDetail(t),
-                  hoverColor: const Color(0xfff5f3ff),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -535,6 +672,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                         // Row 1: ID dan Status
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Column(
@@ -554,17 +692,17 @@ class _LaporanScreenState extends State<LaporanScreen> {
                                     style: const TextStyle(
                                       color: Color(0xff2563eb),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
+                                horizontal: 10,
+                                vertical: 4,
                               ),
                               decoration: BoxDecoration(
                                 color: _getStatusColor(t['status'])
@@ -575,7 +713,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                                 t['status'] ?? '-',
                                 style: TextStyle(
                                   color: _getStatusColor(t['status']),
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -583,67 +721,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        // Row 2: Tanggal dan Items
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Tanggal',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade600,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _formatDate(t['created_at']),
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xff1e293b),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Items',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade600,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${t['items_count'] ?? 0} item',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xff1e293b),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        // Row 3: Total
+                        
+                        // Row 2: Tanggal
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Total',
+                              'Tanggal',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Colors.grey.shade600,
@@ -652,12 +736,64 @@ class _LaporanScreenState extends State<LaporanScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _formatCurrency(t['total_amount']),
+                              _formatDate(t['created_at']),
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: Color(0xff7c3aed),
+                                fontSize: 12,
+                                color: Color(0xff1e293b),
+                                fontWeight: FontWeight.w500,
                               ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        // Row 3: Items dan Total
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Items',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${t['items_count'] ?? 0} item',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xff1e293b),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Total',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _formatCurrency(t['total_amount']),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Color(0xff7c3aed),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -675,10 +811,12 @@ class _LaporanScreenState extends State<LaporanScreen> {
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
       case 'selesai':
+      case 'completed':
         return Colors.green;
       case 'pending':
         return Colors.orange;
       case 'dibatalkan':
+      case 'cancelled':
         return Colors.red;
       default:
         return Colors.grey;
@@ -689,6 +827,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         title: Row(
           children: [
             Container(
@@ -704,7 +845,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            Text('Detail ${t['transaction_no'] ?? t['id']}'),
+            Expanded(
+              child: Text(
+                'Detail ${t['transaction_no'] ?? t['id']}',
+                style: const TextStyle(fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: SingleChildScrollView(
@@ -741,17 +888,18 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
   Widget _detailRow(String label, String value, {bool isBold = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 110,
             child: Text(
               label,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Color(0xff1e293b),
+                fontSize: 13,
               ),
             ),
           ),
@@ -761,6 +909,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
               style: TextStyle(
                 fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
                 color: isBold ? const Color(0xff7c3aed) : Colors.grey.shade700,
+                fontSize: 13,
               ),
             ),
           ),

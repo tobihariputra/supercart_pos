@@ -36,13 +36,20 @@ class _ManagementScreenState extends State<ManagementScreen> {
   int? selectedCategory;
   int? selectedSupplier;
   File? selectedImage;
+  String? existingImageUrl;
 
   @override
   void initState() {
     super.initState();
-    fetchProducts();
-    fetchCategories();
-    fetchSuppliers();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    await Future.wait([
+      fetchProducts(),
+      fetchCategories(),
+      fetchSuppliers(),
+    ]);
   }
 
   @override
@@ -164,6 +171,344 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
   }
 
+  // ================= IMAGE MANAGEMENT DIALOG =================
+
+  void _showImageManagementDialog(Map<String, dynamic> item) {
+    selectedImage = null;
+    existingImageUrl = item['image_url_presigned'] ?? 
+        item['image_url'] ?? 
+        item['image'];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, dialogSetState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            constraints: const BoxConstraints(maxWidth: 450),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Kelola Foto Produk",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xffa855f7),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              item['name'] ?? 'Unknown Product',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          selectedImage = null;
+                          Navigator.pop(dialogContext);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Image Preview
+                  Container(
+                    width: double.infinity,
+                    height: 280,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xffa855f7), width: 2),
+                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.grey[50],
+                    ),
+                    child: selectedImage != null
+                        ? Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.file(
+                                  selectedImage!,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: GestureDetector(
+                                  onTap: () => clearImage(dialogSetState),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade400,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.red.withOpacity(0.3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.close,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : existingImageUrl != null && existingImageUrl != ''
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.network(
+                                  existingImageUrl!,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded /
+                                                loadingProgress.expectedTotalBytes!
+                                            : null,
+                                        color: const Color(0xffa855f7),
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(LucideIcons.image, size: 48, color: Colors.grey[400]),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Gagal memuat gambar',
+                                            style: TextStyle(color: Colors.grey[600]),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              )
+                            : Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(LucideIcons.image, size: 56, color: Colors.grey[400]),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Belum ada gambar',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Delete Image Button (if existing image)
+                  if (existingImageUrl != null && existingImageUrl != '')
+                    Column(
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: isProcessing
+                                ? null
+                                : () async {
+                                    Navigator.pop(dialogContext);
+                                    await _deleteImage(item['id'] as int);
+                                  },
+                            icon: const Icon(LucideIcons.trash2),
+                            label: const Text('Hapus Foto Saat Ini'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: const BorderSide(color: Colors.red, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              foregroundColor: Colors.red,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+
+                  // Pick Image Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: isProcessing ? null : () => pickImage(dialogSetState),
+                          icon: const Icon(LucideIcons.image),
+                          label: const Text('Galeri'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xffa855f7),
+                            side: const BorderSide(color: Color(0xffa855f7), width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: isProcessing ? null : () => takePhoto(dialogSetState),
+                          icon: const Icon(LucideIcons.camera),
+                          label: const Text('Kamera'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xffa855f7),
+                            side: const BorderSide(color: Color(0xffa855f7), width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Upload Button (if image selected)
+                  if (selectedImage != null)
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: isProcessing
+                            ? null
+                            : () async {
+                                Navigator.pop(dialogContext);
+                                await _uploadImage(item['id'] as int);
+                              },
+                        icon: isProcessing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(LucideIcons.upload),
+                        label: const Text('Upload Foto'),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: const Color(0xffa855f7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadImage(int productId) async {
+    if (selectedImage == null || isProcessing) return;
+
+    setState(() => isProcessing = true);
+
+    try {
+      final result = await _productApiService.uploadImage(
+        productId: productId,
+        imageFile: selectedImage!,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        _showSnackBar("Foto berhasil diupload");
+        selectedImage = null;
+        await fetchProducts();
+      } else {
+        _showSnackBar(
+          result['error'] ?? "Gagal upload foto",
+          isError: true,
+        );
+      }
+
+      setState(() => isProcessing = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isProcessing = false);
+      _showSnackBar("Error: $e", isError: true);
+    }
+  }
+
+  Future<void> _deleteImage(int productId) async {
+    if (isProcessing) return;
+
+    setState(() => isProcessing = true);
+
+    try {
+      final result = await _productApiService.deleteProductImage(productId);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        _showSnackBar("Foto berhasil dihapus");
+        await fetchProducts();
+      } else {
+        _showSnackBar(
+          result['error'] ?? "Gagal menghapus foto",
+          isError: true,
+        );
+      }
+
+      setState(() => isProcessing = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isProcessing = false);
+      _showSnackBar("Error: $e", isError: true);
+    }
+  }
+
   // ================= CREATE =================
 
   Future<void> createProduct() async {
@@ -189,31 +534,12 @@ class _ManagementScreenState extends State<ManagementScreen> {
         unit: "pcs",
         purchasePrice: 2500,
         sellingPrice: int.tryParse(_priceController.text.trim()) ?? 0,
-        imageUrl: "https://picsum.photos/200",
       );
 
       if (!mounted) return;
 
       if (result['success'] == true) {
-        final productId = result['data']?['id'];
-
-        if (selectedImage != null && productId != null) {
-          final uploadResult = await _productApiService.uploadImage(
-            productId: productId,
-            imageFile: selectedImage!,
-          );
-
-          if (uploadResult['success'] == true) {
-            _showSnackBar("Produk dan gambar berhasil ditambahkan");
-          } else {
-            _showSnackBar(
-              "Produk ditambahkan, tapi gagal upload gambar: ${uploadResult['error']}",
-            );
-          }
-        } else {
-          _showSnackBar("Produk berhasil ditambahkan");
-        }
-
+        _showSnackBar("Produk berhasil ditambahkan");
         clearForm();
         await fetchProducts();
       } else {
@@ -256,23 +582,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        if (selectedImage != null) {
-          final uploadResult = await _productApiService.uploadImage(
-            productId: id,
-            imageFile: selectedImage!,
-          );
-
-          if (uploadResult['success'] == true) {
-            _showSnackBar("Produk dan gambar berhasil diupdate");
-          } else {
-            _showSnackBar(
-              "Produk diupdate, tapi gagal upload gambar: ${uploadResult['error']}",
-            );
-          }
-        } else {
-          _showSnackBar("Produk berhasil diupdate");
-        }
-
+        _showSnackBar("Produk berhasil diupdate");
         clearForm();
         await fetchProducts();
       } else {
@@ -352,7 +662,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
         content: Text(message),
         duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isError ? Colors.red : null,
+        backgroundColor: isError ? Colors.red : Colors.green,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
@@ -367,6 +677,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
     selectedCategory = null;
     selectedSupplier = null;
     selectedImage = null;
+    existingImageUrl = null;
   }
 
   String _generateBarcode() {
@@ -417,137 +728,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
                           clearForm();
                           Navigator.pop(dialogContext);
                         },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ========== IMAGE SECTION ==========
-                  Container(
-                    width: double.infinity,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[300]!, width: 2),
-                      borderRadius: BorderRadius.circular(12),
-                      color: Colors.grey[100],
-                    ),
-                    child: selectedImage != null
-                        ? Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: Image.file(
-                                  selectedImage!,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: GestureDetector(
-                                  onTap: () => clearImage(dialogSetState),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: const Icon(
-                                      Icons.close,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : item?['image_url'] != null && item?['image_url'] != ''
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              item?['image_url'] ?? '',
-                              width: double.infinity,
-                              height: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        LucideIcons.image,
-                                        size: 48,
-                                        color: Colors.grey[400],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Gagal memuat gambar',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          )
-                        : Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  LucideIcons.image,
-                                  size: 48,
-                                  color: Colors.grey[400],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Belum ada gambar',
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
-                              ],
-                            ),
-                          ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ========== IMAGE PICKER BUTTONS ==========
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: isProcessing
-                              ? null
-                              : () => pickImage(dialogSetState),
-                          icon: const Icon(LucideIcons.image),
-                          label: const Text('Galeri'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: isProcessing
-                              ? null
-                              : () => takePhoto(dialogSetState),
-                          icon: const Icon(LucideIcons.camera),
-                          label: const Text('Kamera'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -873,170 +1053,206 @@ class _ManagementScreenState extends State<ManagementScreen> {
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : products.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          LucideIcons.package,
-                          size: 64,
-                          color: Colors.grey[300],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Belum ada produk',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton.icon(
-                          onPressed: fetchProducts,
-                          icon: const Icon(LucideIcons.refreshCw),
-                          label: const Text('Refresh'),
-                        ),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: fetchProducts,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(8),
-                      itemCount: products.length,
-                      itemBuilder: (_, i) {
-                        final item = products[i];
-                        final stock =
-                            (item['stock_quantity'] as num?)?.toInt() ?? 0;
-                        final minStock =
-                            (item['min_stock'] as num?)?.toInt() ?? 0;
-                        final isLow = stock <= minStock;
-                        final imageUrl =
-                            item['image_url_presigned'] ??
-                            item['image_url'] ??
-                            item['image'];
-
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              LucideIcons.package,
+                              size: 64,
+                              color: Colors.grey[300],
                             ),
-                            leading: Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                color: Colors.grey[200],
+                            const SizedBox(height: 16),
+                            Text(
+                              'Belum ada produk',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[500],
                               ),
-                              child: imageUrl != null && imageUrl != ''
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(
-                                        imageUrl,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) {
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: fetchProducts,
+                              icon: const Icon(LucideIcons.refreshCw),
+                              label: const Text('Refresh'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: fetchProducts,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(8),
+                          itemCount: products.length,
+                          itemBuilder: (_, i) {
+                            final item = products[i];
+                            final stock =
+                                (item['stock_quantity'] as num?)?.toInt() ?? 0;
+                            final minStock =
+                                (item['min_stock'] as num?)?.toInt() ?? 0;
+                            final isLow = stock <= minStock;
+                            final imageUrl = item['image_url_presigned'] ??
+                                item['image_url'] ??
+                                item['image'];
+
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                leading: Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: imageUrl != null && imageUrl != ''
+                                          ? const Color(0xffa855f7)
+                                          : Colors.transparent,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: imageUrl != null && imageUrl != ''
+                                      ? ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          child: Image.network(
+                                            imageUrl,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error,
+                                                stackTrace) {
                                               return Icon(
                                                 LucideIcons.image,
                                                 color: Colors.grey[400],
                                               );
                                             },
+                                          ),
+                                        )
+                                      : Icon(
+                                          LucideIcons.image,
+                                          color: Colors.grey[400],
+                                        ),
+                                ),
+                                title: Text(
+                                  item['name'] ?? 'Unknown',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            LucideIcons.box,
+                                            size: 14,
+                                            color: Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Stok: $stock',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isLow
+                                                  ? Colors.red
+                                                  : Colors.grey[600],
+                                              fontWeight: isLow
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    )
-                                  : Icon(
-                                      LucideIcons.image,
-                                      color: Colors.grey[400],
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            LucideIcons.tag,
+                                            size: 14,
+                                            color: Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              'Kategori: ${item['categories']?['name'] ?? '-'}',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        imageUrl != null && imageUrl != ''
+                                            ? LucideIcons.check
+                                            : LucideIcons.upload,
+                                        color: imageUrl != null &&
+                                                imageUrl != ''
+                                            ? Colors.green
+                                            : Colors.orange,
+                                      ),
+                                      onPressed: isProcessing
+                                          ? null
+                                          : () =>
+                                              _showImageManagementDialog(item),
+                                      tooltip: 'Kelola Foto',
                                     ),
-                            ),
-                            title: Text(
-                              item['name'] ?? 'Unknown',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        LucideIcons.box,
-                                        size: 14,
-                                        color: Colors.grey[600],
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Stok: $stock',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        LucideIcons.tag,
-                                        size: 14,
-                                        color: Colors.grey[600],
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Kategori: ${item['categories']?['name'] ?? '-'}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(LucideIcons.edit),
-                                  color: Colors.blue,
-                                  onPressed: isProcessing
-                                      ? null
-                                      : () => showForm(item: item, index: i),
+                                    IconButton(
+                                      icon: const Icon(LucideIcons.edit),
+                                      color: Colors.blue,
+                                      onPressed: isProcessing
+                                          ? null
+                                          : () =>
+                                              showForm(item: item, index: i),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(LucideIcons.trash2),
+                                      color: Colors.red,
+                                      onPressed: isProcessing
+                                          ? null
+                                          : () =>
+                                              deleteProduct(item['id'] as int, i),
+                                    ),
+                                  ],
                                 ),
-                                IconButton(
-                                  icon: const Icon(LucideIcons.trash2),
-                                  color: Colors.red,
-                                  onPressed: isProcessing
-                                      ? null
-                                      : () =>
-                                            deleteProduct(item['id'] as int, i),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
           ),
         ],
       ),
     );
   }
+
   void _showLogoutDialog() {
     showDialog(
       context: context,

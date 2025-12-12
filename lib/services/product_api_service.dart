@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supercart_pos/core/app_config.dart';
 
@@ -119,11 +118,6 @@ class ProductApiService {
     required File imageFile,
   }) async {
     try {
-      debugPrint('📤 Uploading image for product: $productId');
-      debugPrint('📁 File path: ${imageFile.path}');
-      debugPrint('📊 File size: ${imageFile.lengthSync()} bytes');
-
-      // Buat FormData dengan file
       final formData = FormData.fromMap({
         'image': await MultipartFile.fromFile(
           imageFile.path,
@@ -132,23 +126,16 @@ class ProductApiService {
         ),
       });
 
-      debugPrint('📤 FormData created, sending request...');
-
       final response = await _dio.post(
         '$baseUrl/products/upload-image/$productId',
         data: formData,
       );
-
-      debugPrint('✅ Response status: ${response.statusCode}');
-      debugPrint('📋 Response: ${response.data}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = _convertMapTypes(response.data);
         final imageUrl = data['result']?['data']?['image_url'] ??
             data['result']?['image_url'] ??
             data['image_url'];
-
-        debugPrint('✅ Image uploaded successfully: $imageUrl');
 
         return {
           'success': true,
@@ -158,13 +145,8 @@ class ProductApiService {
         };
       }
 
-      debugPrint('❌ Upload failed with status: ${response.statusCode}');
       return _handleErrorResponse(response.data, response.statusCode ?? 500);
     } on DioException catch (e) {
-      debugPrint('❌ Dio Error: ${e.message}');
-      debugPrint('📊 Status Code: ${e.response?.statusCode}');
-      debugPrint('📋 Response: ${e.response?.data}');
-
       if (e.type == DioExceptionType.connectionTimeout) {
         return {'success': false, 'error': 'Koneksi timeout'};
       } else if (e.type == DioExceptionType.receiveTimeout) {
@@ -174,8 +156,39 @@ class ProductApiService {
       }
       return {'success': false, 'error': 'Gagal upload gambar: ${e.message}'};
     } catch (e) {
-      debugPrint('❌ Unexpected Error: $e');
       return {'success': false, 'error': 'Gagal upload gambar: $e'};
+    }
+  }
+
+  // ================= DELETE PRODUCT IMAGE =================
+
+  Future<Map<String, dynamic>> deleteProductImage(int productId) async {
+    try {
+      final response = await _dio.delete(
+        '$baseUrl/products/remove-image/$productId',
+      );
+
+      if (response.statusCode == 200) {
+        final data = _convertMapTypes(response.data);
+        return {
+          'success': true,
+          'data': data['result']?['data'],
+          'message': data['meta']?['message'] ?? 'Image berhasil dihapus',
+        };
+      }
+
+      return _handleErrorResponse(response.data, response.statusCode ?? 500);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout) {
+        return {'success': false, 'error': 'Koneksi timeout'};
+      } else if (e.type == DioExceptionType.receiveTimeout) {
+        return {'success': false, 'error': 'Server tidak merespon'};
+      } else if (e.response != null) {
+        return _handleErrorResponse(e.response!.data, e.response!.statusCode ?? 500);
+      }
+      return {'success': false, 'error': 'Gagal hapus gambar: ${e.message}'};
+    } catch (e) {
+      return {'success': false, 'error': 'Gagal hapus gambar: $e'};
     }
   }
 
